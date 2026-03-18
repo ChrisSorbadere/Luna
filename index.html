@@ -466,21 +466,63 @@ function getObsScore(date){
   return{score:s,label:['Mauvaise','Médiocre','Bonne','Très bonne','Excellente'][s]};
 }
 
-function getUpcomingPhases(date){
-  const phases=[],found={};
-  const targets=[
-    {name:'Nouvelle Lune 🌑',test:e=>e<11.25||e>348.75},
-    {name:'Premier Quartier 🌓',test:e=>e>78&&e<108},
-    {name:'Pleine Lune 🌕',test:e=>e>165&&e<195},
-    {name:'Dernier Quartier 🌗',test:e=>e>258&&e<288},
-  ];
-  let d=new Date(date.getTime()+86400000);
-  for(let i=0;i<35&&Object.keys(found).length<4;i++){
-    const ph=getMoonPhase(d);
-    targets.forEach(t=>{if(!found[t.name]&&t.test(ph.elongation)){found[t.name]={name:t.name,date:new Date(d)};phases.push(found[t.name]);}});
-    d=new Date(d.getTime()+86400000);
+// Calcul précis de la date/heure d'une phase lunaire (Meeus ch.49)
+function moonPhaseExact(k, phaseType){
+  // phaseType: 0=NL, 0.25=PQ, 0.5=PL, 0.75=DQ
+  const kp = k + phaseType;
+  const T = kp / 1236.85;
+  const T2 = T*T, T3 = T*T*T, T4 = T*T*T*T;
+  let JDE = 2451550.09766 + 29.530588861*kp + 0.00015437*T2 - 0.000000150*T3 + 0.00000000073*T4;
+  const E = 1 - 0.002516*T - 0.0000074*T2;
+  const M  = (2.5534  + 29.10535670*kp - 0.0000014*T2 - 0.00000011*T3)*DEG;
+  const Mp = (201.5643 + 385.81693528*kp + 0.0107582*T2 + 0.00001238*T3 - 0.000000058*T4)*DEG;
+  const F  = (160.7108 + 390.67050284*kp - 0.0016118*T2 - 0.00000227*T3 + 0.000000011*T4)*DEG;
+  const Om = (124.7746 - 1.56375588*kp + 0.0020672*T2 + 0.00000215*T3)*DEG;
+  if(phaseType===0||phaseType===0.5){
+    // NL et PL
+    const sign = phaseType===0.5?-1:1;
+    JDE += sign*(0.1734-0.000393*T)*Math.sin(M)  + 0.0021*Math.sin(2*M)
+         - 0.4068*Math.sin(Mp) + 0.0161*Math.sin(2*Mp) - 0.0004*Math.sin(3*Mp)
+         + 0.0104*Math.sin(2*F) - 0.0051*E*Math.sin(M+Mp) - 0.0074*E*Math.sin(M-Mp)
+         + 0.0004*Math.sin(2*F+M) - 0.0004*Math.sin(2*F-M) - 0.0006*E*Math.sin(2*F+Mp)
+         + 0.0010*Math.sin(2*F-Mp) + 0.0005*E*Math.sin(M+2*Mp);
+    if(phaseType===0.5)
+      JDE += -0.0017*Math.sin(Om) + 0.0007*E*Math.sin(M);
+  } else {
+    // PQ et DQ
+    JDE += (0.1721-0.0004*T)*Math.sin(M) + 0.0021*Math.sin(2*M)
+         - 0.6280*Math.sin(Mp) + 0.0089*Math.sin(2*Mp) - 0.0004*Math.sin(3*Mp)
+         + 0.0079*Math.sin(2*F) - 0.0119*E*Math.sin(M+Mp) - 0.0047*E*Math.sin(M-Mp)
+         + 0.0003*Math.sin(2*F+M) - 0.0003*Math.sin(2*F-M) - 0.0004*E*Math.sin(2*F+Mp)
+         + 0.0003*Math.sin(2*F-Mp) + 0.0003*E*Math.sin(M+2*Mp)
+         + (phaseType===0.25?0.0028:-0.0028)*E*Math.cos(M-Mp)
+         + 0.0003*Math.cos(2*Mp);
   }
-  return phases.sort((a,b)=>a.date-b.date);
+  // JDE → Date UTC
+  const d = new Date((JDE - 2440587.5) * 86400000);
+  return d;
+}
+
+function getUpcomingPhases(date){
+  // Trouver k de départ (cycle lunaison depuis J2000)
+  const jd = julianDate(date);
+  let k = Math.floor((jd - 2451550.09766) / 29.530588861);
+  const phases = [];
+  const PHASE_TYPES = [
+    {t:0,    name:'Nouvelle Lune 🌑'},
+    {t:0.25, name:'Premier Quartier 🌓'},
+    {t:0.5,  name:'Pleine Lune 🌕'},
+    {t:0.75, name:'Dernier Quartier 🌗'},
+  ];
+  // Scanner les 3 prochains cycles pour trouver 4 phases futures
+  for(let dk=0; dk<=3 && phases.length<4; dk++){
+    PHASE_TYPES.forEach(p=>{
+      if(phases.length>=4) return;
+      const d = moonPhaseExact(k+dk, p.t);
+      if(d > date) phases.push({name:p.name, date:d});
+    });
+  }
+  return phases.sort((a,b)=>a.date-b.date).slice(0,4);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -557,11 +599,12 @@ async function fetchWeather(lat,lon){
 
 async function fetchLaunches(){
   const now=Date.now();
-  if(spx.data&&(now-spx.ts)<3600000)return spx.data;
+  if(spx.data&&(now-spx.ts)<900000)return spx.data;
   if(spx.loading)return null;
   spx.loading=true;
   try{
-    const r=await fetch('https://ll.thespacedevs.com/2.2.0/launch/upcoming/?format=json&limit=10&mode=list');
+    const now2=new Date().toISOString();
+    const r=await fetch(`https://ll.thespacedevs.com/2.2.0/launch/upcoming/?format=json&limit=10&mode=list&net__gt=${encodeURIComponent(now2)}`);
     if(!r.ok)throw new Error('HTTP '+r.status);
     const d=await r.json();spx.data=d;spx.ts=now;return d;
   }catch(e){console.warn('Launches:',e.message);return null;}
@@ -803,7 +846,7 @@ async function renderSpaceView(){
   let launchContent='';
   let launchCount='';
   if(spx.data&&spx.data.results&&spx.data.results.length){
-    const launches=spx.data.results.slice(0,8);
+    const now3=new Date();const launches=spx.data.results.filter(l=>new Date(l.net)>now3).slice(0,8);
     launchCount=`${launches.length} à venir`;
     launchContent=launches.map(l=>{
       const dt=new Date(l.net),diff=Math.round((dt-new Date())/86400000);
