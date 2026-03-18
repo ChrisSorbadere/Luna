@@ -1,5 +1,5 @@
-// Luna Pro — Service Worker v2 (structure plate)
-const CACHE_NAME = 'luna-pro-v3-flat';
+// Luna Pro — Service Worker v3
+const CACHE_NAME = 'luna-pro-v4';
 
 const PRECACHE_ASSETS = [
   './index.html',
@@ -8,66 +8,60 @@ const PRECACHE_ASSETS = [
   './icon-512.png',
 ];
 
-// Installation : précache immédiat
+// Domaines dont les réponses ne doivent JAMAIS être mises en cache
+const NO_CACHE_DOMAINS = [
+  'll.thespacedevs.com',   // Launch Library — données temps réel
+  'api.open-meteo.com',    // Météo — géré par cache applicatif interne
+];
+
 self.addEventListener('install', event => {
-  console.log('[SW] Installation…');
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('[SW] Mise en cache des assets');
-        return cache.addAll(PRECACHE_ASSETS);
-      })
-      .then(() => {
-        console.log('[SW] Installation terminée');
-        return self.skipWaiting();
-      })
+      .then(cache => cache.addAll(PRECACHE_ASSETS))
+      .then(() => self.skipWaiting())
   );
 });
 
-// Activation : nettoyage anciens caches
 self.addEventListener('activate', event => {
-  console.log('[SW] Activation…');
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
-        keys.filter(k => k !== CACHE_NAME).map(k => {
-          console.log('[SW] Suppression ancien cache :', k);
-          return caches.delete(k);
-        })
-      )
-    ).then(() => {
-      console.log('[SW] Activation terminée — contrôle de tous les clients');
-      return self.clients.claim();
-    })
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
 
-// Fetch
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // API météo → network-first
-  if (url.hostname === 'api.open-meteo.com') {
-    event.respondWith(networkFirst(event.request));
+  // APIs temps réel → réseau direct, JAMAIS de cache
+  if (NO_CACHE_DOMAINS.some(d => url.hostname === d)) {
+    event.respondWith(networkOnly(event.request));
     return;
   }
 
-  // Google Fonts → network-first
+  // Google Fonts → network-first avec cache
   if (url.hostname.includes('googleapis.com') || url.hostname.includes('gstatic.com')) {
     event.respondWith(networkFirst(event.request));
     return;
   }
 
-  // Tout le reste (assets locaux) → cache-first
+  // Assets locaux → cache-first
   event.respondWith(cacheFirst(event.request));
 });
 
+async function networkOnly(request) {
+  try {
+    return await fetch(request);
+  } catch(e) {
+    return new Response('{"error":"offline","results":[]}', {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
 async function cacheFirst(request) {
   const cached = await caches.match(request);
-  if (cached) {
-    console.log('[SW] Depuis cache :', request.url);
-    return cached;
-  }
+  if (cached) return cached;
   try {
     const response = await fetch(request);
     if (response.ok) {
@@ -76,11 +70,9 @@ async function cacheFirst(request) {
     }
     return response;
   } catch(e) {
-    console.warn('[SW] Hors ligne, ressource non cachée :', request.url);
-    // Fallback HTML minimal
     if (request.destination === 'document') {
-      const cached = await caches.match('./index.html');
-      if (cached) return cached;
+      const fallback = await caches.match('./index.html');
+      if (fallback) return fallback;
     }
     return new Response('Hors ligne', { status: 503 });
   }
