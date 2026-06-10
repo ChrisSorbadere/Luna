@@ -1,5 +1,5 @@
-// Luna Pro — Service Worker v3
-const CACHE_NAME = 'luna-pro-v4';
+// Luna Pro — Service Worker v5
+const CACHE_NAME = 'luna-pro-v5';
 
 const PRECACHE_ASSETS = [
   './index.html',
