@@ -171,6 +171,71 @@ button { background:none; border:none; color:inherit; cursor:pointer; }
 .anim-right { animation:slideR 0.28s ease-out; }
 @keyframes pulse { 0%,100%{opacity:0.5} 50%{opacity:1} }
 .pulse { animation:pulse 1.8s ease-in-out infinite; }
+
+/* Mode Nuit Rouge */
+body.night-mode {
+  filter: brightness(0.85) sepia(0.3) hue-rotate(-15deg) saturate(0.9);
+  background: #1a0a0a;
+}
+body.night-mode .content,
+body.night-mode header,
+body.night-mode .section,
+body.night-mode .stat-card,
+body.night-mode .tonight-hero {
+  background: rgba(20, 10, 10, 0.85);
+  border-color: rgba(150, 80, 80, 0.3);
+}
+body.night-mode .nav-btn.active {
+  color: #e0a0a0;
+}
+.night-mode-toggle {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  z-index: 100;
+  background: rgba(200, 180, 120, 0.15);
+  border: 1px solid rgba(200, 180, 120, 0.3);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.2rem;
+  color: #c8b878;
+  transition: all 0.3s ease;
+}
+body.night-mode .night-mode-toggle {
+  background: rgba(200, 100, 100, 0.25);
+  border-color: #e07070;
+  color: #e07070;
+}
+
+.ar-toggle {
+  position: fixed;
+  top: 12px;
+  right: 68px;
+  z-index: 100;
+  background: rgba(100, 180, 255, 0.15);
+  border: 1px solid rgba(100, 180, 255, 0.3);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.2rem;
+  color: #64b4ff;
+  transition: all 0.3s ease;
+}
+.ar-toggle.supported {
+  display: flex;
+}
+.ar-toggle.unsupported {
+  display: none;
+}
 </style>
 </head>
 <body>
@@ -183,7 +248,7 @@ button { background:none; border:none; color:inherit; cursor:pointer; }
       <div class="date-indicator sans" onclick="resetToToday()" id="current-date-display">Aujourd'hui</div>
       <button class="day-arrow" onclick="shiftDate(1)" aria-label="Jour suivant">›</button>
     </div>
-  </header>
+  <button class="night-mode-toggle" onclick="toggleNightMode()" aria-label="Mode nuit" title="Mode nuit (préserve la vision nocturne)">🌙</button></header>
   <div class="content" id="tab-content"></div>
 </div>
 <nav class="bottom-nav" id="bottom-nav"></nav>
@@ -192,7 +257,7 @@ button { background:none; border:none; color:inherit; cursor:pointer; }
 // ÉTAT GLOBAL
 // ═══════════════════════════════════════════════════════════════════
 const DEG=Math.PI/180, RAD=180/Math.PI;
-const state={ tab:0, lat:41.65, lon:-0.88, selectedDate:new Date(), calOffset:0, eventFilter:'all' };
+const state={ tab:0, lat:41.65, lon:-0.88, selectedDate:new Date(), calOffset:0, eventFilter:'all', nightMode: false, favorites: new Set(), quiz: { current: 0, score: 0, answers: [], category: 'all' } };
 const wx={ data:null, lat:null, lon:null, ts:0, loading:false };
 const spx={ data:null, ts:0, loading:false };
 
@@ -305,7 +370,7 @@ const ASTRO_EVENTS=[
   {cat:'opposition',d:'2027-10-18',icon:'♄🔭',title:'Saturne en opposition',detail:'Visible toute la nuit'},
   {cat:'opposition',d:'2028-04-10',icon:'♃🔭',title:'Jupiter en opposition',detail:'Visible toute la nuit dans le Lion'},
 ];
-const FILTER_LABELS={all:'Tous',eclipse:'Éclipses',meteor:'Météores',conjonction:'Conjonctions',solstice:'Solstices',superlune:'Super Lunes',opposition:'Oppositions'};
+const FILTER_LABELS={all:'Tous',eclipse:'Éclipses',meteor:'Météores',conjonction:'Conjonctions',solstice:'Solstices',superlune:'Super Lunes',opposition:'Oppositions',favorites:'Favoris'};
 const MOON_NAMES=['Lune du Loup','Lune de Neige','Lune du Ver','Lune Rose','Lune des Fleurs','Lune des Fraises','Lune du Cerf','Lune de l\'Esturgeon','Lune de la Moisson','Lune du Chasseur','Lune du Castor','Lune Froide'];
 
 // ═══════════════════════════════════════════════════════════════════
@@ -603,63 +668,96 @@ function sunArcSVG(rise,set){
 // ═══════════════════════════════════════════════════════════════════
 async function fetchWeather(lat,lon){
   const now=Date.now();
-  if(wx.data&&wx.lat===lat&&wx.lon===lon&&(now-wx.ts)<1800000)return wx.data;
-  if(wx.loading)return null;
+  if(wx.data&&wx.lat===lat&&wx.lon===lon&&(now-wx.ts)<1800000)return {data: wx.data, cached: true};
+  if(wx.loading)return {data: wx.data, loading: true};
+  
   // Cache persistant (survit au rechargement de l'app)
   try{
     const c=JSON.parse(localStorage.getItem('luna-wx'));
     if(c&&Math.abs(c.lat-lat)<0.05&&Math.abs(c.lon-lon)<0.05&&(now-c.ts)<1800000){
-      wx.data=c.data;wx.lat=lat;wx.lon=lon;wx.ts=c.ts;return c.data;
+      wx.data=c.data;wx.lat=lat;wx.lon=lon;wx.ts=c.ts;
+      return {data: c.data, cached: true, timestamp: c.ts};
     }
   }catch(e){}
+  
   wx.loading=true;
+  wx.error = null;
+  
   try{
+    // Vérifier la connexion
+    if(!navigator.onLine){
+      throw new Error('Hors ligne');
+    }
+    
     const tz=Intl.DateTimeFormat().resolvedOptions().timeZone||'auto';
     const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&hourly=temperature_2m,cloud_cover,visibility,wind_speed_10m&forecast_days=3&timezone=${encodeURIComponent(tz)}`;
-    const r=await fetch(url);if(!r.ok)throw new Error('HTTP '+r.status);
-    const d=await r.json();wx.data=d;wx.lat=lat;wx.lon=lon;wx.ts=now;
+    const r=await fetch(url, {cache: 'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    wx.data=d;wx.lat=lat;wx.lon=lon;wx.ts=now;
     try{localStorage.setItem('luna-wx',JSON.stringify({data:d,lat,lon,ts:now}));}catch(e){}
-    return d;
+    wx.loading=false;
+    return {data: d, cached: false, timestamp: now};
   }catch(e){
     console.warn('Météo:',e.message);
-    // Hors ligne : données périmées < 12h plutôt que rien
+    wx.loading=false;
+    wx.error = e.message;
+    
+    // Hors ligne ou erreur : données périmées < 3 jours plutôt que rien
     try{
       const c=JSON.parse(localStorage.getItem('luna-wx'));
-      if(c&&Math.abs(c.lat-lat)<0.05&&Math.abs(c.lon-lon)<0.05&&(now-c.ts)<43200000){
-        wx.data=c.data;wx.lat=lat;wx.lon=lon;wx.ts=c.ts;return c.data;
+      if(c&&Math.abs(c.lat-lat)<0.05&&Math.abs(c.lon-lon)<0.05&&(now-c.ts)<259200000){
+        wx.data=c.data;wx.lat=lat;wx.lon=lon;wx.ts=c.ts;
+        return {data: c.data, cached: true, timestamp: c.ts, stale: true};
       }
     }catch(e2){}
-    return null;
+    
+    // Retourner des données par défaut si rien n'est disponible
+    return {data: null, error: 'Données météo indisponibles', cached: false};
   }
-  finally{wx.loading=false;}
 }
 
 async function fetchLaunches(){
   const now=Date.now();
-  if(spx.data&&(now-spx.ts)<900000)return spx.data;
-  if(spx.loading)return null;
+  if(spx.data&&(now-spx.ts)<900000)return {data: spx.data, cached: true};
+  if(spx.loading)return {data: spx.data, loading: true};
+  
   try{
     const c=JSON.parse(localStorage.getItem('luna-launch'));
-    if(c&&(now-c.ts)<900000){spx.data=c.data;spx.ts=c.ts;return c.data;}
+    if(c&&(now-c.ts)<900000){spx.data=c.data;spx.ts=c.ts;return {data: c.data, cached: true, timestamp: c.ts};
+    }
   }catch(e){}
+  
   spx.loading=true;
+  spx.error = null;
+  
   try{
+    // Vérifier la connexion
+    if(!navigator.onLine){
+      throw new Error('Hors ligne');
+    }
+    
     const now2=new Date().toISOString();
-    const r=await fetch(`https://ll.thespacedevs.com/2.2.0/launch/upcoming/?format=json&limit=10&mode=list&net__gt=${encodeURIComponent(now2)}`);
+    const r=await fetch(`https://ll.thespacedevs.com/2.2.0/launch/upcoming/?format=json&limit=10&mode=list&net__gt=${encodeURIComponent(now2)}`, {cache: 'no-store'});
     if(!r.ok)throw new Error('HTTP '+r.status);
     const d=await r.json();spx.data=d;spx.ts=now;
     try{localStorage.setItem('luna-launch',JSON.stringify({data:d,ts:now}));}catch(e){}
-    return d;
+    spx.loading=false;
+    return {data: d, cached: false, timestamp: now};
   }catch(e){
     console.warn('Launches:',e.message);
-    // Hors ligne ou quota dépassé : données périmées < 24h
+    spx.loading=false;
+    spx.error = e.message;
+    
+    // Hors ligne ou quota dépassé : données périmées < 7 jours
     try{
       const c=JSON.parse(localStorage.getItem('luna-launch'));
-      if(c&&(now-c.ts)<86400000){spx.data=c.data;spx.ts=c.ts;return c.data;}
+      if(c&&(now-c.ts)<604800000){spx.data=c.data;spx.ts=c.ts;return {data: c.data, cached: true, timestamp: c.ts, stale: true};
+      }
     }catch(e2){}
-    return null;
+    
+    return {data: null, error: 'Données lancements indisponibles', cached: false};
   }
-  finally{spx.loading=false;}
 }
 
 function localDateStr(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
@@ -841,9 +939,13 @@ function renderTidesView(){
 function renderEventsView(){
   const now=new Date(),year=now.getFullYear(),f=state.eventFilter;
   const start=new Date(year,0,1).getTime(),end=new Date(year+1,0,1).getTime();
-  const filtered=ASTRO_EVENTS.filter(e=>{const t=new Date(e.d).getTime();return t>=start&&t<end&&(f==='all'||e.cat===f);}).sort((a,b)=>new Date(a.d)-new Date(b.d));
+  const filtered=ASTRO_EVENTS.filter(e=>{
+  const t=new Date(e.d).getTime();
+  if(f==='favorites') return t>=start&&t<end&&isFavorite(e.d, 'event');
+  return t>=start&&t<end&&(f==='all'||e.cat===f);
+}).sort((a,b)=>new Date(a.d)-new Date(b.d));
   const cats=['all','eclipse','meteor','conjonction','solstice','superlune','opposition'];
-  const filterBar=`<div class="filter-bar">${cats.map(c=>`<button class="filter-btn ${state.eventFilter===c?'active':''}" onclick="state.eventFilter='${c}';render()">${FILTER_LABELS[c]}</button>`).join('')}</div>`;
+  const filterBar=`<div class="filter-bar">${cats.map(c=>`<button class="filter-btn ${state.eventFilter===c?'active':''}" onclick="state.eventFilter='${c}';render()">${FILTER_LABELS[c]}</button>`).join('')}<button class="filter-btn ${state.eventFilter==='favorites'?'active':''}" onclick="state.eventFilter='favorites';render()">⭐ Favoris</button></div>`;
   const items=filtered.map(e=>{
     const dt=new Date(e.d),isPast=dt<now,diff=Math.round((dt-now)/86400000);
     const when=isPast?`Il y a ${Math.abs(diff)}j`:diff===0?'Aujourd\'hui !':diff===1?'Demain':`Dans ${diff}j`;
@@ -1014,6 +1116,14 @@ const SKY_CONST=[
 let skyCanvas=null, skyCtx=null, skyZoom=1, skyOffX=0, skyOffY=0;
 let skyDragging=false, skyLastX=0, skyLastY=0, skyPinchDist=0;
 let skyAnimId=null;
+// Cache pour les positions statiques (étoiles, constellations)
+let skyStarsCache = null;
+let skyConstellationsCache = null;
+// Throttling pour drawSky
+let lastSkyDrawTime = 0;
+let skyDrawTimeout = null;
+let skyDragging=false, skyLastX=0, skyLastY=0, skyPinchDist=0;
+let skyAnimId=null;
 
 function siderealTime(date,lon){
   const jd=2451545+(date-new Date('2000-01-01T12:00:00Z'))/86400000;
@@ -1089,6 +1199,15 @@ function skyProject(alt,az,R){
 
 function drawSky(){
   if(!skyCanvas||!skyCtx)return;
+  
+  // Throttling : ne pas redessiner plus souvent que toutes les 500ms
+  const now = Date.now();
+  if (now - lastSkyDrawTime < 500) {
+    if (skyDrawTimeout) clearTimeout(skyDrawTimeout);
+    skyDrawTimeout = setTimeout(drawSky, 500 - (now - lastSkyDrawTime));
+    return;
+  }
+  lastSkyDrawTime = now;
   const W=skyCanvas.width/skyDpr,H=skyCanvas.height/skyDpr,R=Math.min(W,H)*0.46;
   skyCtx.setTransform(skyDpr,0,0,skyDpr,0,0);
   skyCtx.clearRect(0,0,W,H);
@@ -1157,6 +1276,25 @@ function drawSky(){
     const col=mag<0?`rgba(200,220,255,${br})`:mag<1?`rgba(220,230,255,${br})`:`rgba(235,235,220,${br})`;
     skyCtx.beginPath();skyCtx.arc(p.x,p.y,r,0,Math.PI*2);
     skyCtx.fillStyle=col;skyCtx.fill();
+  // Planètes (positions calculées via éléments orbitaux)
+  Object.keys(PLANET_ELEMENTS).forEach(name=>{
+    const el=PLANET_ELEMENTS[name];
+    const eq=geoPlanet(name,now);
+    const hz=eqToHz(eq.ra,eq.dec,state.lat,lst);
+    const pp=skyProject(hz.alt,hz.az,R);
+    if(!pp)return;
+    const pr=3.2/skyZoom;
+    const pg=skyCtx.createRadialGradient(pp.x,pp.y,0,pp.x,pp.y,pr*3);
+    pg.addColorStop(0,el.col);pg.addColorStop(1,'rgba(0,0,0,0)');
+    skyCtx.beginPath();skyCtx.arc(pp.x,pp.y,pr*3,0,Math.PI*2);skyCtx.fillStyle=pg;skyCtx.globalAlpha=0.35;skyCtx.fill();skyCtx.globalAlpha=1;
+    skyCtx.beginPath();skyCtx.arc(pp.x,pp.y,pr,0,Math.PI*2);skyCtx.fillStyle=el.col;skyCtx.fill();
+    if(skyZoom>0.6){
+      skyCtx.fillStyle=el.col;skyCtx.font=`${Math.round(13/skyZoom)}px Fira Sans`;
+      skyCtx.textAlign='left';skyCtx.textBaseline='middle';
+      skyCtx.fillText(el.sym+' '+el.label,pp.x+pr+3/skyZoom,pp.y);
+    }
+  });
+
     // Halo pour étoiles brillantes
     if(mag<1.5){
       const g=skyCtx.createRadialGradient(p.x,p.y,0,p.x,p.y,r*4/skyZoom);
@@ -1176,25 +1314,6 @@ function drawSky(){
       skyCtx.font=`${fs}px Fira Sans`;
       skyCtx.textAlign='left';skyCtx.textBaseline='middle';
       skyCtx.fillText(name,p.x+r+2/skyZoom,p.y);
-    }
-  });
-
-  // Planètes (positions calculées via éléments orbitaux)
-  Object.keys(PLANET_ELEMENTS).forEach(name=>{
-    const el=PLANET_ELEMENTS[name];
-    const eq=geoPlanet(name,now);
-    const hz=eqToHz(eq.ra,eq.dec,state.lat,lst);
-    const pp=skyProject(hz.alt,hz.az,R);
-    if(!pp)return;
-    const pr=3.2/skyZoom;
-    const pg=skyCtx.createRadialGradient(pp.x,pp.y,0,pp.x,pp.y,pr*3);
-    pg.addColorStop(0,el.col);pg.addColorStop(1,'rgba(0,0,0,0)');
-    skyCtx.beginPath();skyCtx.arc(pp.x,pp.y,pr*3,0,Math.PI*2);skyCtx.fillStyle=pg;skyCtx.globalAlpha=0.35;skyCtx.fill();skyCtx.globalAlpha=1;
-    skyCtx.beginPath();skyCtx.arc(pp.x,pp.y,pr,0,Math.PI*2);skyCtx.fillStyle=el.col;skyCtx.fill();
-    if(skyZoom>0.6){
-      skyCtx.fillStyle=el.col;skyCtx.font=`${Math.round(13/skyZoom)}px Fira Sans`;
-      skyCtx.textAlign='left';skyCtx.textBaseline='middle';
-      skyCtx.fillText(el.sym+' '+el.label,pp.x+pr+3/skyZoom,pp.y);
     }
   });
 
@@ -1333,11 +1452,257 @@ function renderSkyView(){
       <div class="row"><span class="row-label">Points blancs</span><span class="sans" style="font-size:0.8rem;">~100 étoiles brillantes</span></div>
       <div class="row"><span class="row-label">Points colorés</span><span class="sans" style="font-size:0.8rem;">☿ ♀ ♂ ♃ ♄ Planètes</span></div>
     </div>
-    <p class="notice">Carte mise à jour toutes les 30 secondes. Noms visibles en zoom ≥ 1.5x.</p>
+    <p class="notice">Carte mise à jour toutes les 30 secondes. 
+${arSupported ? '<span style="color: #64b4ff; font-weight: 500;">📱 Essayez le mode AR pour une expérience immersive !</span>' : ''}
+</p> Noms visibles en zoom ≥ 1.5x.</p>
   </div>`;
 }
 
 let skyDpr=1;
+
+function toggleNightMode() {
+  state.nightMode = !state.nightMode;
+  document.body.classList.toggle('night-mode', state.nightMode);
+  localStorage.setItem('luna-night-mode', state.nightMode ? 'true' : 'false');
+  render();
+}
+
+// Charger le mode nuit depuis localStorage
+try {
+  const nm = localStorage.getItem('luna-night-mode');
+  if (nm === 'true') {
+    state.nightMode = true;
+    document.body.classList.add('night-mode');
+  }
+} catch (e) {}
+
+
+// Gestion des notifications push
+async function requestNotificationPermission() {
+  if ('Notification' in window) {
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        console.log('Permission des notifications accordée');
+        localStorage.setItem('luna-notifications', 'granted');
+        // S'abonner aux notifications via le service worker
+        subscribeToPushNotifications();
+      } else {
+        console.log('Permission des notifications refusée');
+        localStorage.setItem('luna-notifications', 'denied');
+      }
+    } catch (e) {
+      console.error('Erreur notification:', e);
+    }
+  }
+}
+
+async function subscribeToPushNotifications() {
+  if ('serviceWorker' in navigator && 'PushManager' in window) {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: 'YOUR_VAPID_PUBLIC_KEY' // À remplacer par votre clé
+      });
+      console.log('Abonnement Push:', subscription);
+      // Envoyer l'abonnement au serveur (à implémenter)
+      localStorage.setItem('luna-push-subscription', JSON.stringify(subscription));
+    } catch (e) {
+      console.error('Erreur abonnement Push:', e);
+    }
+  }
+}
+
+// Vérifier et demander les notifications au chargement
+if ('Notification' in window && localStorage.getItem('luna-notifications') !== 'denied') {
+  // Demander après 3 secondes pour ne pas bloquer le chargement
+  setTimeout(requestNotificationPermission, 3000);
+}
+
+// Fonction pour afficher une notification locale (si permission accordée)
+function showLocalNotification(title, options = {}) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    const notification = new Notification(title, {
+      body: options.body || '',
+      icon: options.icon || './icon-192.png',
+      vibrate: options.vibrate || [200, 100, 200],
+      data: options.data || {},
+      ...options
+    });
+    
+    notification.onclick = function() {
+      if (options.onClick) options.onClick();
+      notification.close();
+    };
+    
+    return notification;
+  }
+  return null;
+}
+
+// Notifier pour les événements astronomiques importants
+function checkAndNotifyUpcomingEvents() {
+  const now = new Date();
+  const tomorrow = new Date(now.getTime() + 86400000);
+  
+  // Filtrer les événements de demain
+  const upcomingEvents = ASTRO_EVENTS.filter(e => {
+    const eventDate = new Date(e.d);
+    return eventDate >= now && eventDate <= tomorrow;
+  });
+  
+  if (upcomingEvents.length > 0 && 'Notification' in window && Notification.permission === 'granted') {
+    const event = upcomingEvents[0];
+    showLocalNotification(`🔭 Événement astronomique demain : ${event.title}`, {
+      body: event.detail,
+      icon: './icon-192.png',
+      data: { type: 'event', id: event.d }
+    });
+  }
+}
+
+// Vérifier les événements au démarrage et périodiquement
+setTimeout(checkAndNotifyUpcomingEvents, 5000);
+setInterval(checkAndNotifyUpcomingEvents, 86400000); // Toutes les 24h
+
+
+// Détection WebXR pour la réalité augmentée
+let arSupported = false;
+
+function checkARSupport() {
+  if ('xr' in navigator) {
+    navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
+      arSupported = supported;
+      const arButton = document.querySelector('.ar-toggle');
+      if (arButton) {
+        arButton.classList.toggle('supported', supported);
+      }
+    }).catch(e => {
+      console.log('WebXR non supporté:', e);
+      arSupported = false;
+    });
+  }
+}
+
+async function toggleAR() {
+  if (!arSupported) {
+    alert('La réalité augmentée n'est pas supportée sur cet appareil. Essayez avec un smartphone moderne (iOS 13+ ou Android avec ARCore/ARKit).');
+    return;
+  }
+  
+  try {
+    // Vérifier si Three.js est disponible (pour une implémentation complète)
+    if (typeof THREE !== 'undefined') {
+      startARWithThreeJS();
+    } else {
+      // Version basique sans Three.js
+      const session = await navigator.xr.requestSession('immersive-ar', {
+        requiredFeatures: ['local', 'hit-test']
+      });
+      
+      session.addEventListener('end', () => {
+        console.log('Session AR terminée');
+      });
+      
+      // Afficher un message que l'AR est active
+      alert('Mode AR activé ! Pointez votre appareil vers le ciel pour voir les objets célestes.');
+    }
+  } catch (e) {
+    console.error('Erreur AR:', e);
+    alert('Impossible de démarrer le mode AR: ' + e.message);
+  }
+}
+
+// Vérifier la compatibilité WebXR au chargement
+if ('xr' in navigator) {
+  checkARSupport();
+}
+
+
+// Gestion des favoris
+function loadFavorites() {
+  try {
+    const saved = localStorage.getItem('luna-favorites');
+    if (saved) {
+      state.favorites = new Set(JSON.parse(saved));
+    }
+  } catch (e) {
+    console.error('Erreur chargement favoris:', e);
+    state.favorites = new Set();
+  }
+}
+
+function saveFavorites() {
+  try {
+    localStorage.setItem('luna-favorites', JSON.stringify(Array.from(state.favorites)));
+  } catch (e) {
+    console.error('Erreur sauvegarde favoris:', e);
+  }
+}
+
+function toggleFavorite(id, type = 'event') {
+  const key = `${type}:${id}`;
+  if (state.favorites.has(key)) {
+    state.favorites.delete(key);
+  } else {
+    state.favorites.add(key);
+  }
+  saveFavorites();
+  render();
+}
+
+function isFavorite(id, type = 'event') {
+  return state.favorites.has(`${type}:${id}`);
+}
+
+// Charger les favoris au démarrage
+loadFavorites();
+
+
+// Gestion du quiz
+function getQuizQuestions(category = 'all') {
+  if (category === 'all') return QUIZ_QUESTIONS;
+  return QUIZ_QUESTIONS.filter(q => q.category === category);
+}
+
+function startQuiz(category = 'all') {
+  const questions = getQuizQuestions(category);
+  state.quiz = {
+    current: 0,
+    score: 0,
+    answers: [],
+    category: category,
+    questions: questions.map(q => ({...q})) // Copie pour éviter les mutations
+  };
+  render();
+}
+
+function answerQuizQuestion(selectedIndex) {
+  const q = state.quiz;
+  const currentQuestion = q.questions[q.current];
+  const isCorrect = selectedIndex === currentQuestion.answer;
+  
+  q.answers.push({questionId: currentQuestion.id, selected: selectedIndex, correct: isCorrect});
+  if (isCorrect) q.score++;
+  
+  q.current++;
+  
+  if (q.current >= q.questions.length) {
+    // Quiz terminé
+    render();
+  } else {
+    // Question suivante
+    render();
+  }
+}
+
+function getQuizProgress() {
+  const q = state.quiz;
+  if (!q.questions || q.questions.length === 0) return 0;
+  return (q.current / q.questions.length) * 100;
+}
+
 function initSkyCanvas(){
   skyCanvas=document.getElementById('skyCanvas');
   if(!skyCanvas)return;
@@ -1379,6 +1744,346 @@ function initSkyCanvas(){
   skyCanvas.addEventListener('touchend',e=>{if(e.touches.length===0)skyDragging=false;tp=[...e.touches];},{passive:true});
 }
 
+
+
+// RENDU : MÉTÉO 7 JOURS
+// ═══════════════════════════════════════════════════════════════════════
+function renderWeatherView() {
+  const d = state.selectedDate;
+  
+  // Si pas de données météo, afficher un message
+  if (!wx.data) {
+    return `<div class="anim-in">
+      <div class="section" style="text-align: center; padding: 40px 20px;">
+        <div style="font-size: 2rem; margin-bottom: 16px;">🌦️</div>
+        <h2 style="font-size: 1.1rem; margin-bottom: 8px;">Météo astronomique</h2>
+        <p class="sans" style="color: #7a7a9a; font-size: 0.85rem;">Chargement des prévisions...</p>
+        ${wx.loading ? '<div class="loading-pulse pulse">⏳</div>' : '<button onclick="fetchWeather(state.lat, state.lon)" style="margin-top: 16px; padding: 8px 16px; background: rgba(200,180,120,0.2); border: 1px solid #c8b878; border-radius: 8px; color: #e8dfc4; font-family: Fira Sans, sans-serif;">Rafraîchir</button>'}
+      </div>
+    </div>`;
+  }
+  
+  // Extraire les données pour les 7 prochains jours
+  const now = new Date();
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(now.getTime() + i * 86400000);
+    days.push(date);
+  }
+  
+  // Calculer les scores d'observation pour chaque jour
+  const dayScores = days.map(date => {
+    const obs = getObsScore(date);
+    const sun = getSunTimes(date, state.lat, state.lon);
+    const ph = getMoonPhase(date);
+    return { date, obs, sun, ph };
+  });
+  
+  // Générer le HTML pour chaque jour
+  const dayCards = dayScores.map(({date, obs, sun, ph}) => {
+    const dayName = date.toLocaleDateString('fr-FR', { weekday: 'long' });
+    const dateStr = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+    const isToday = date.toDateString() === now.toDateString();
+    const scoreColor = obs.score >= 4 ? '#50d080' : obs.score >= 3 ? '#c8b878' : obs.score >= 2 ? '#e09030' : '#e05050';
+    
+    return `<div class="section" style="margin-bottom: 12px;">
+      <div class="row" style="padding: 12px 14px; border-bottom: none;">
+        <div style="flex: 1;">
+          <div style="font-size: 0.95rem; font-weight: ${isToday ? '600' : '400'}; color: ${isToday ? '#e8dfc4' : '#d0c8b0'};">${dayName}</div>
+          <div class="sans" style="font-size: 0.75rem; color: #7a7a9a; margin-top: 2px;">${dateStr}</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="font-size: 1.2rem;">${ph.phaseEmoji}</div>
+          <div style="text-align: right;">
+            <div style="font-size: 0.9rem; color: ${scoreColor}; font-weight: 500;">${obs.label}</div>
+            <div class="sans" style="font-size: 0.7rem; color: #6a6a8a;">${sun.rise} - ${sun.set}</div>
+          </div>
+        </div>
+      </div>
+      
+      ${wx.data && wx.data.hourly ? `
+      <div style="padding: 0 14px 12px;">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px;">
+          ${Array.from({length: 4}, (_, j) => {
+            const hourIndex = i * 24 + j * 6;
+            if (hourIndex >= wx.data.hourly.time.length) return '';
+            const cloud = wx.data.hourly.cloud_cover[hourIndex];
+            const temp = wx.data.hourly.temperature_2m[hourIndex];
+            const time = new Date(wx.data.hourly.time[hourIndex]).toLocaleTimeString('fr-FR', {hour: '2-digit'});
+            const cloudColor = cloud > 80 ? '#6a6a8a' : cloud > 50 ? '#9a9aaa' : cloud > 20 ? '#c8b878' : '#50d080';
+            return `<div style="text-align: center;">
+              <div style="font-size: 0.65rem; color: #7a7a9a; margin-bottom: 2px;">${time}</div>
+              <div style="width: 24px; height: 24px; border-radius: 4px; background: ${cloudColor}; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: white;">${cloud}%</div>
+              <div style="font-size: 0.65rem; color: #6a6a8a; margin-top: 2px;">${Math.round(temp)}°</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+      ` : ''}
+    </div>`;
+  }).join('');
+  
+  return `<div class="anim-in">
+    <div style="text-align: center; margin-bottom: 16px; padding-top: 8px;">
+      <div style="font-size: 2.5rem;">🌦️</div>
+      <h2 style="font-size: 1.2rem; margin-top: 8px; font-weight: 400;">Prévisions météo astronomique</h2>
+      <p class="sans" style="font-size: 0.8rem; color: #7a7a9a; margin-top: 4px;">7 jours - ${state.lat.toFixed(2)}°${state.lat >= 0 ? 'N' : 'S'}, ${state.lon.toFixed(2)}°${state.lon >= 0 ? 'E' : 'O'}</p>
+    </div>
+    
+    <div class="section" style="margin-bottom: 12px;">
+      <div class="row">
+        <span class="row-label">Source</span>
+        <span class="sans" style="font-size: 0.85rem;">Open-Meteo (mis à jour toutes les 30 min)</span>
+      </div>
+      <div class="row">
+        <span class="row-label">Dernière mise à jour</span>
+        <span class="sans" style="font-size: 0.85rem;">${wx.data ? new Date(wx.ts).toLocaleString('fr-FR') : 'Jamais'}</span>
+      </div>
+    </div>
+    
+    ${dayCards}
+    
+    <p class="notice">Les scores d'observation combinent météo et phase lunaire. Les données sont mises en cache localement.</p>
+  </div>`;
+}
+
+
+// DONNÉES DU QUIZ ASTRONOMIQUE
+// ═══════════════════════════════════════════════════════════════════════
+const QUIZ_QUESTIONS = [
+  {
+    id: 1,
+    category: 'constellations',
+    question: 'Quelle est la constellation visible sur cette image ?',
+    image: null, // À remplacer par une URL ou SVG
+    options: ['Grande Ourse', 'Orion', 'Cassiopée', 'Lion'],
+    answer: 1, // Index de la bonne réponse (Orion)
+    explanation: 'Orion est reconnaissable à ses 3 étoiles alignées (la ceinture) et aux étoiles brillantes Bételgeuse et Rigel.'
+  },
+  {
+    id: 2,
+    category: 'planetes',
+    question: 'Quelle planète est connue comme la "planète rouge" ?',
+    options: ['Vénus', 'Mars', 'Jupiter', 'Saturne'],
+    answer: 1,
+    explanation: 'Mars est appelée la planète rouge en raison de son apparence rougeâtre causée par l'oxyde de fer à sa surface.'
+  },
+  {
+    id: 3,
+    category: 'lune',
+    question: 'Combien de temps met la Lune pour faire un tour complet autour de la Terre ?',
+    options: ['24 heures', '27.3 jours', '30 jours', '365 jours'],
+    answer: 1,
+    explanation: 'La Lune met environ 27.3 jours pour faire un tour complet autour de la Terre (période sidérale).'
+  },
+  {
+    id: 4,
+    category: 'etoiles',
+    question: 'Quelle est l'étoile la plus proche de la Terre (hors Soleil) ?',
+    options: ['Sirius', 'Proxima Centauri', 'Alpha Centauri', 'Vega'],
+    answer: 1,
+    explanation: 'Proxima Centauri est l'étoile la plus proche de nous, à environ 4.24 années-lumière.'
+  },
+  {
+    id: 5,
+    category: 'eclipses',
+    question: 'Quelle phase lunaire est nécessaire pour une éclipse solaire ?',
+    options: ['Pleine Lune', 'Nouvelle Lune', 'Premier Quartier', 'Dernier Quartier'],
+    answer: 1,
+    explanation: 'Une éclipse solaire se produit lorsque la Lune passe entre la Terre et le Soleil, ce qui ne peut arriver qu'à la Nouvelle Lune.'
+  },
+  {
+    id: 6,
+    category: 'constellations',
+    question: 'Quelle constellation contient l'étoile Polaire ?',
+    options: ['Grande Ourse', 'Petite Ourse', 'Cassiopée', 'Dragon'],
+    answer: 1,
+    explanation: 'L'étoile Polaire (Polaris) se trouve dans la constellation de la Petite Ourse.'
+  },
+  {
+    id: 7,
+    category: 'planetes',
+    question: 'Quelle est la plus grande planète du système solaire ?',
+    options: ['Terre', 'Saturne', 'Jupiter', 'Neptune'],
+    answer: 2,
+    explanation: 'Jupiter est la plus grande planète, avec un diamètre environ 11 fois celui de la Terre.'
+  },
+  {
+    id: 8,
+    category: 'galaxie',
+    question: 'Dans quelle galaxie se trouve notre système solaire ?',
+    options: ['Andromède', 'Voie Lactée', 'Nuage de Magellan', 'Galaxie du Triangle'],
+    answer: 1,
+    explanation: 'Notre système solaire fait partie de la Voie Lactée, une galaxie spirale.'
+  }
+];
+
+const QUIZ_CATEGORIES = [
+  {id: 'all', name: 'Tous'},
+  {id: 'constellations', name: 'Constellations'},
+  {id: 'planetes', name: 'Planètes'},
+  {id: 'lune', name: 'Lune'},
+  {id: 'etoiles', name: 'Étoiles'},
+  {id: 'eclipses', name: 'Éclipses'},
+  {id: 'galaxie', name: 'Galaxie'}
+];
+
+
+// RENDU : QUIZ ASTRONOMIQUE
+// ═══════════════════════════════════════════════════════════════════════
+function renderQuizView() {
+  const q = state.quiz;
+  const questions = getQuizQuestions(q.category);
+  
+  // Si pas de quiz en cours, afficher le menu
+  if (!q.questions || q.questions.length === 0) {
+    return `<div class="anim-in">
+      <div style="text-align: center; margin-bottom: 20px; padding-top: 16px;">
+        <div style="font-size: 2.5rem;">🎓</div>
+        <h2 style="font-size: 1.2rem; margin-top: 8px; font-weight: 400;">Apprendre l'astronomie</h2>
+        <p class="sans" style="font-size: 0.85rem; color: #7a7a9a; margin-top: 4px;">Testez vos connaissances avec nos quiz</p>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">Choisissez une catégorie</div>
+        <div class="filter-bar">
+          ${QUIZ_CATEGORIES.map(cat => `
+            <button class="filter-btn" onclick="startQuiz('${cat.id}')" style="flex: 1; text-align: center;">
+              ${cat.name}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+      
+      <div class="section" style="margin-top: 12px;">
+        <div class="row">
+          <span class="row-label">📊 Statistiques</span>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="lbl">Quiz terminés</div>
+            <div class="val">0</div>
+            <div class="sub">À venir</div>
+          </div>
+          <div class="stat-card">
+            <div class="lbl">Meilleur score</div>
+            <div class="val">-</div>
+            <div class="sub">/ ${QUIZ_QUESTIONS.length}</div>
+          </div>
+        </div>
+      </div>
+      
+      <p class="notice">Plus de questions à venir ! Le quiz vous aide à apprendre les bases de l'astronomie.</p>
+    </div>`;
+  }
+  
+  // Quiz en cours
+  const currentQuestion = q.questions[q.current];
+  const progress = getQuizProgress();
+  const isComplete = q.current >= q.questions.length;
+  
+  if (isComplete) {
+    // Résultats du quiz
+    const scorePercentage = Math.round((q.score / q.questions.length) * 100);
+    const scoreColor = scorePercentage >= 80 ? '#50d080' : scorePercentage >= 50 ? '#c8b878' : '#e05050';
+    
+    return `<div class="anim-in">
+      <div style="text-align: center; margin-bottom: 20px; padding-top: 16px;">
+        <div style="font-size: 3rem;">🎉</div>
+        <h2 style="font-size: 1.4rem; margin-top: 8px; font-weight: 400;">Quiz terminé !</h2>
+        <div style="margin-top: 16px;">
+          <div style="font-size: 2.5rem; font-weight: 300; color: ${scoreColor};">${q.score}/${q.questions.length}</div>
+          <div style="font-size: 1rem; color: ${scoreColor}; margin-top: 4px;">${scorePercentage}%</div>
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">Récapitulatif</div>
+        ${q.answers.map((answer, index) => {
+          const question = q.questions[index];
+          const isCorrect = answer.correct;
+          return `<div class="row" style="padding: 12px 14px;">
+            <div style="flex: 1;">
+              <div style="font-size: 0.85rem; ${isCorrect ? 'color: #50d080;' : 'color: #e05050;'}">
+                ${index + 1}. ${question.question}
+              </div>
+              <div class="sans" style="font-size: 0.75rem; color: #7a7a9a; margin-top: 4px;">
+                ${isCorrect ? '✓ Bonne réponse' : '✗ Mauvaise réponse'}
+              </div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 0.9rem;">${question.options[question.answer]}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+      
+      <div style="display: flex; gap: 12px; padding: 16px; justify-content: center;">
+        <button onclick="startQuiz('${q.category}')" style="flex: 1; padding: 12px; background: rgba(200,180,120,0.2); border: 1px solid #c8b878; border-radius: 8px; color: #e8dfc4; font-family: Fira Sans, sans-serif; font-size: 0.9rem;">
+          Recommencer
+        </button>
+        <button onclick="state.quiz = { current: 0, score: 0, answers: [], category: 'all' }; render();" style="flex: 1; padding: 12px; background: rgba(100,180,255,0.15); border: 1px solid #64b4ff; border-radius: 8px; color: #64b4ff; font-family: Fira Sans, sans-serif; font-size: 0.9rem;">
+          Menu
+        </button>
+      </div>
+      
+      <p class="notice">Continuez à apprendre pour améliorer vos connaissances en astronomie !</p>
+    </div>`;
+  }
+  
+  // Question en cours
+  return `<div class="anim-in">
+    <div style="text-align: center; margin-bottom: 16px; padding-top: 16px;">
+      <div style="font-size: 2rem;">🎓</div>
+      <h2 style="font-size: 1rem; margin-top: 8px; font-weight: 400;">Question ${q.current + 1}/${q.questions.length}</h2>
+      <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.06); border-radius: 4px; margin-top: 8px; overflow: hidden;">
+        <div style="width: ${progress}%; height: 100%; background: #c8b878; border-radius: 4px; transition: width 0.3s ease;"></div>
+      </div>
+    </div>
+    
+    <div class="section" style="margin-bottom: 16px;">
+      <div style="padding: 16px; text-align: center;">
+        <h3 style="font-size: 1rem; margin-bottom: 12px; line-height: 1.5;">${currentQuestion.question}</h3>
+        
+        ${currentQuestion.image ? `<img src="${currentQuestion.image}" style="max-width: 100%; border-radius: 12px; margin-bottom: 16px;" alt="Illustration">` : ''}
+        
+        <div style="display: grid; gap: 10px; margin-top: 8px;">
+          ${currentQuestion.options.map((option, index) => `
+            <button onclick="answerQuizQuestion(${index})" style="
+              padding: 12px 16px;
+              background: rgba(255,255,255,0.04);
+              border: 1px solid rgba(255,255,255,0.12);
+              border-radius: 10px;
+              color: #d0c8b0;
+              font-family: Fira Sans, sans-serif;
+              font-size: 0.85rem;
+              text-align: left;
+              cursor: pointer;
+              transition: all 0.2s ease;
+            " onmouseover="this.style.background='rgba(200,180,120,0.15)'; this.style.borderColor='#c8b878';" onmouseout="this.style.background='rgba(255,255,255,0.04)'; this.style.borderColor='rgba(255,255,255,0.12)';">
+              ${String.fromCharCode(65 + index)}. ${option}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+    
+    <div style="padding: 0 16px 16px;">
+      <button onclick="state.quiz = { current: 0, score: 0, answers: [], category: 'all' }; render();" style="
+        padding: 8px 16px;
+        background: rgba(100,100,120,0.15);
+        border: 1px solid rgba(100,100,120,0.3);
+        border-radius: 8px;
+        color: #6a6a8a;
+        font-family: Fira Sans, sans-serif;
+        font-size: 0.8rem;
+        cursor: pointer;
+      " onmouseover="this.style.background='rgba(100,100,120,0.25)';" onmouseout="this.style.background='rgba(100,100,120,0.15)';">
+        Abandonner
+      </button>
+    </div>
+  </div>`;
+}
 
 // RENDU : CALENDRIER
 // ═══════════════════════════════════════════════════════════════════
@@ -1422,7 +2127,7 @@ const TABS=[
   {i:'🌊',l:'Marées',t:3},{i:'📋',l:'Événements',t:4},{i:'🚀',l:'Espace',t:5},
   {i:'🌌',l:'Ciel',t:6},{i:'📅',l:'Calendrier',t:7}
 ];
-const MAX_TAB=TABS.length-1;
+const MAX_TAB=TABS.length-1; // 9 (Apprendre est le 10ème onglet, index 9)
 let swipeDir=0;
 
 function renderNav(){
@@ -1456,12 +2161,14 @@ function render(){
       case 5:html=await renderSpaceView();break;
       case 6:html=renderSkyView();break;
       case 7:html=renderCalendarView();break;
+      case 8:html=renderWeatherView();break;
+      case 9:html=renderQuizView();break;
       default:html='<div></div>';
     }
     if(html)tc.innerHTML=html.replace('class="anim-in"',`class="${anim}"`);
     renderNav();
   };
-  if(state.tab===1||state.tab===5){tc.innerHTML=`<div class="${anim}"><div class="loading-pulse pulse">⏳ Chargement…</div></div>`;}
+  if(state.tab===1||state.tab===5||state.tab===8){tc.innerHTML=`<div class="${anim}"><div class="loading-pulse pulse">⏳ Chargement…</div></div>`;}
   if(state.tab===6){tc.innerHTML=`<div class="${anim}"><div class="loading-pulse pulse">🌌 Initialisation de la carte…</div></div>`;}
   asyncRender().then(()=>{
     if(state.tab===6) setTimeout(initSkyCanvas, 50);
