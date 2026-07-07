@@ -100,7 +100,18 @@ header h1 { font-size: 2rem; font-weight: 300; letter-spacing: 6px; color: #e8df
 .event-dot { width:4px; height:4px; border-radius:50%; margin:2px auto 0; }
 
 /* Événements filtres */
-.filter-bar { display:flex; gap:6px; flex-wrap:wrap; padding:10px 14px 6px; }
+\.filter-bar {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  white-space: nowrap;
+  flex-wrap: nowrap; /* Empêche le saut de ligne */
+  padding: 10px 14px 10px;
+  -webkit-overflow-scrolling: touch; /* Défilement inertiel sur iOS */
+}
+.filter-bar::-webkit-scrollbar {
+  display: none; /* Masque la barre de défilement pour garder l'aspect épuré */
+}
 .filter-btn {
   font-size:0.67rem; font-family:'Fira Sans',sans-serif; padding:5px 11px;
   border-radius:14px; border:1px solid rgba(255,255,255,0.12);
@@ -326,7 +337,7 @@ const MISSIONS=[
 // ═══════════════════════════════════════════════════════════════════
 function julianDate(d){
   let y=d.getUTCFullYear(),m=d.getUTCMonth()+1;
-  const day=d.getUTCDate()+d.getUTCHours()/24+d.getUTCMinutes()/1440;
+  const day=d.getUTCDate()+d.getUTCHours()/24+d.getUTCMinutes()/1440+d.getUTCSeconds()/86400;
   if(m<=2){y--;m+=12;}
   const A=Math.floor(y/100),B=2-A+Math.floor(A/4);
   return Math.floor(365.25*(y+4716))+Math.floor(30.6001*(m+1))+day+B-1524.5;
@@ -469,7 +480,7 @@ function getObsScore(date){
   const ph=getMoonPhase(date),ms=Math.round(5*(1-ph.illumination/100));
   const doy=Math.floor((date-new Date(date.getFullYear(),0,0))/86400000);
   const ss=doy>90&&doy<270?2:4;
-  const s=Math.min(5,Math.round((ms*3+ss*2)/5));
+  const s=Math.min(4,Math.round((ms*3+ss*2)/5));
   return{score:s,label:['Mauvaise','Médiocre','Bonne','Très bonne','Excellente'][s]};
 }
 
@@ -718,7 +729,9 @@ async function renderTonightView(){
     [{n:'M31',name:'Andromède',type:'Galaxie'},{n:'M27',name:'Haltère',type:'Nébuleuse planétaire'},{n:'M15',name:'NGC 7078',type:'Amas globulaire'}]];
   const messier=MESSIER[Math.floor(doy/91)%4];
   const tc=document.getElementById('tab-content');
-  if(!wx.data&&!wx.loading){tc.innerHTML=`<div class="anim-in"><div class="loading-pulse pulse">⏳ Chargement météo…</div></div>`;await fetchWeather(state.lat,state.lon);}
+  const initialTab = state.tab;
+  if(!wx.data&&!wx.loading){tc.innerHTML=`<div class="anim-in"><div class="loading-pulse pulse">⏳ Chargement météo…</div></div>`;await fetchWeather(state.lat,state.lon);
+  if(state.tab !== initialTab) return;}
   const nh=wx.data?extractNightHours(wx.data,d,sunsetH,sunriseH):[];
   let gScore,gLabel,wDesc;
   if(nh.length){
@@ -1198,6 +1211,68 @@ function drawSky(){
     skyCtx.beginPath();skyCtx.arc(mp.x,mp.y,mr,0,Math.PI*2);skyCtx.fillStyle='rgba(240,235,200,0.9)';skyCtx.fill();
     skyCtx.beginPath();skyCtx.arc(mp.x,mp.y,mr*2.5,0,Math.PI*2);skyCtx.fillStyle=mg2;skyCtx.fill();
     if(skyZoom>0.6){skyCtx.fillStyle='rgba(240,235,150,0.9)';skyCtx.font=`${Math.round(14/skyZoom)}px Fira Sans`;skyCtx.textAlign='left';skyCtx.textBaseline='middle';skyCtx.fillText(moonH.phaseEmoji+' Lune',mp.x+mr+3/skyZoom,mp.y);}
+
+
+  // ═══════════════════════════════════════════════════════════════════
+  // INJECTION DES OBJETS EN ORBITE EN TEMPS RÉEL (ISS & TIANGONG)
+  // ═══════════════════════════════════════════════════════════════════
+  const SATELLITES = [
+    { name: 'ISS', color: '#50d080', period: 92.9, inc: 51.64 },
+    { name: 'Tiangong', color: '#64b4ff', period: 91.5, inc: 41.58 }
+  ];
+
+  SATELLITES.forEach(sat => {
+    const tNow = Date.now() / 1000;
+    // Modélisation orbitale simplifiée et déterministe basée sur le temps réel
+    const orbitalSpeed = (2 * Math.PI) / (sat.period * 60);
+    const currentPhase = tNow * orbitalSpeed;
+    
+    // Calcul des coordonnées équatoriales (Ascension Droite et Déclinaison)
+    let ra = ( (tNow / 240) % 24 ); // Dérive horaire pour simuler la rotation terrestre
+    let decl = sat.inc * Math.sin(currentPhase);
+    
+    // Conversion en coordonnées horizontales locales (Altitude / Azimut)
+    const satHz = eqToHz(ra, decl, state.lat, lst);
+    
+    // On n'affiche le satellite que s'il passe au-dessus de l'horizon local (alt > 0)
+    if (satHz.alt > 0) {
+      const sp = skyProject(satHz.alt, satHz.az, R);
+      if (sp) {
+        // 1. Dessin du vecteur de trajectoire récente (traînée de 5 points en arrière)
+        skyCtx.beginPath();
+        skyCtx.strokeStyle = sat.color + '33'; // Couleur transparente à 20%
+        skyCtx.lineWidth = 1.5 / skyZoom;
+        
+        for (let i = 5; i >= 0; i--) {
+          const tPrev = tNow - (i * 15); // Intervalle de 15 secondes par point
+          const prevPhase = tPrev * orbitalSpeed;
+          const raPrev = ( (tPrev / 240) % 24 );
+          const declPrev = sat.inc * Math.sin(prevPhase);
+          const hzPrev = eqToHz(raPrev, declPrev, state.lat, lst);
+          const spPrev = skyProject(hzPrev.alt, hzPrev.az, R);
+          
+          if (spPrev) {
+            if (i === 5) skyCtx.moveTo(spPrev.x, spPrev.y);
+            else skyCtx.lineTo(spPrev.x, spPrev.y);
+          }
+        }
+        skyCtx.stroke();
+
+        // 2. Dessin du point lumineux du satellite
+        skyCtx.beginPath();
+        skyCtx.arc(sp.x, sp.y, 3.5 / skyZoom, 0, Math.PI * 2);
+        skyCtx.fillStyle = sat.color;
+        skyCtx.fill();
+        
+        // 3. Affichage du label textuel indexé sur le niveau de zoom
+        skyCtx.fillStyle = 'rgba(220, 225, 245, 0.85)';
+        skyCtx.font = `600 ${Math.round(10 / skyZoom)}px Fira Sans`;
+        skyCtx.textAlign = 'left';
+        skyCtx.textBaseline = 'middle';
+        skyCtx.fillText(`🛰️ ${sat.name}`, sp.x + 6 / skyZoom, sp.y);
+      }
+    }
+  });
   }
 
   // Soleil (si visible)
