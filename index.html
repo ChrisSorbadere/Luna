@@ -30,6 +30,7 @@ body {
 header { text-align: center; margin-bottom: 8px; padding-top: 12px; }
 header h1 { font-size: 2rem; font-weight: 300; letter-spacing: 6px; color: #e8dfc4; text-transform: uppercase; }
 .loc { font-size: 0.72rem; color: #6a6a8a; margin-top: 4px; font-family:'Fira Sans',sans-serif; }
+.version { font-size: 0.65rem; color: #5a5a7a; text-align: center; margin-top: 6px; font-family:'Fira Sans',sans-serif; }
 .date-indicator {
   background: rgba(200,180,120,0.1); border: 1px solid rgba(200,180,120,0.2);
   padding: 5px 14px; border-radius: 20px; font-size: 0.78rem; margin-top: 8px;
@@ -172,6 +173,7 @@ button { background:none; border:none; color:inherit; cursor:pointer; }
       <div class="date-indicator sans" onclick="resetToToday()" id="current-date-display">Aujourd'hui</div>
       <button class="day-arrow" onclick="shiftDate(1)" aria-label="Jour suivant">›</button>
     </div>
+    <p class="version" id="version-text">v5</p>
   </header>
   <div class="content" id="tab-content"></div>
 </div>
