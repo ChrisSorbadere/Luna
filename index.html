@@ -35,7 +35,6 @@ header h1 { font-size: 2rem; font-weight: 300; letter-spacing: 6px; color: #e8df
   padding: 5px 14px; border-radius: 20px; font-size: 0.78rem; margin-top: 8px;
   display: inline-block; cursor: pointer; font-family:'Fira Sans',sans-serif;
 }
-.day-arrow { font-size:1.5rem; padding:2px 12px; color:#c8b878; margin-top:8px; line-height:1; }
 
 /* Cards */
 .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
@@ -136,15 +135,14 @@ nav.bottom-nav {
   position:fixed; bottom:0; left:50%; transform:translateX(-50%);
   width:100%; max-width:430px;
   background:rgba(8,8,26,0.97); backdrop-filter:blur(20px);
-  padding:8px 2px calc(14px + env(safe-area-inset-bottom, 12px));
+  padding:8px 2px 26px;
   display:flex; justify-content:space-around; z-index:10;
   border-top:1px solid rgba(255,255,255,0.05);
 }
 button { background:none; border:none; color:inherit; cursor:pointer; }
 .nav-btn { text-align:center; transition:opacity 0.2s; padding:2px 4px; min-width:46px; }
-.nav-btn.active { color:#c8b878; }
 .nav-icon { font-size:1.1rem; }
-.nav-label { font-size:0.62rem; font-family:'Fira Sans',sans-serif; margin-top:2px; }
+.nav-label { font-size:0.58rem; font-family:'Fira Sans',sans-serif; margin-top:2px; }
 
 /* Misc */
 .obs-star { font-size:1.1rem; }
@@ -167,11 +165,7 @@ button { background:none; border:none; color:inherit; cursor:pointer; }
   <header>
     <h1>Luna</h1>
     <p class="loc" id="location-text">Localisation…</p>
-    <div style="display:flex;align-items:center;justify-content:center;gap:2px;">
-      <button class="day-arrow" onclick="shiftDate(-1)" aria-label="Jour précédent">‹</button>
-      <div class="date-indicator sans" onclick="resetToToday()" id="current-date-display">Aujourd'hui</div>
-      <button class="day-arrow" onclick="shiftDate(1)" aria-label="Jour suivant">›</button>
-    </div>
+    <div class="date-indicator sans" onclick="resetToToday()" id="current-date-display">Aujourd'hui</div>
   </header>
   <div class="content" id="tab-content"></div>
 </div>
@@ -184,6 +178,7 @@ const DEG=Math.PI/180, RAD=180/Math.PI;
 const state={ tab:0, lat:41.65, lon:-0.88, selectedDate:new Date(), calOffset:0, eventFilter:'all' };
 const wx={ data:null, lat:null, lon:null, ts:0, loading:false };
 const spx={ data:null, ts:0, loading:false };
+const iss={ data:null, ts:0, loading:false };
 
 // ═══════════════════════════════════════════════════════════════════
 // DONNÉES PLANÈTES
@@ -194,18 +189,18 @@ const PLANET_EVENTS=[
   {p:'mercury',t:'maxE',d:'2024-11-16',e:23},{p:'mercury',t:'maxW',d:'2025-01-24',e:-25},
   {p:'mercury',t:'maxE',d:'2025-03-08',e:19},{p:'mercury',t:'maxW',d:'2025-05-01',e:-27},
   {p:'mercury',t:'maxE',d:'2025-07-04',e:26},{p:'mercury',t:'maxW',d:'2025-08-19',e:-18},
-  {p:'mercury',t:'maxE',d:'2025-10-29',e:24},{p:'mercury',t:'maxW',d:'2025-12-08',e:-21},
-  {p:'mercury',t:'maxE',d:'2026-02-16',e:18},{p:'mercury',t:'maxW',d:'2026-04-12',e:-27},
+  {p:'mercury',t:'maxE',d:'2025-10-29',e:24},{p:'mercury',t:'maxW',d:'2026-01-09',e:-23},
+  {p:'mercury',t:'maxE',d:'2026-02-16',e:19},{p:'mercury',t:'maxW',d:'2026-04-12',e:-28},
   {p:'mercury',t:'maxE',d:'2026-06-16',e:25},{p:'mercury',t:'maxW',d:'2026-08-07',e:-19},
-  {p:'venus',t:'maxE',d:'2025-01-10',e:47},{p:'venus',t:'ic',d:'2025-03-23',e:0},
-  {p:'venus',t:'maxW',d:'2025-06-01',e:-46},{p:'venus',t:'sc',d:'2026-01-07',e:0},
-  {p:'venus',t:'maxE',d:'2026-08-15',e:46},{p:'venus',t:'ic',d:'2026-10-25',e:0},
-  {p:'venus',t:'maxW',d:'2027-01-04',e:-47},
-  {p:'mars',t:'opp',d:'2025-01-16',e:180},{p:'mars',t:'conj',d:'2026-02-11',e:0},{p:'mars',t:'opp',d:'2027-02-20',e:180},
-  {p:'jupiter',t:'opp',d:'2024-12-07',e:180},{p:'jupiter',t:'conj',d:'2025-06-24',e:0},
-  {p:'jupiter',t:'opp',d:'2026-01-10',e:180},{p:'jupiter',t:'conj',d:'2026-07-30',e:0},{p:'jupiter',t:'opp',d:'2027-02-11',e:180},
+  {p:'venus',t:'maxW',d:'2025-01-10',e:-47},{p:'venus',t:'ic',d:'2025-03-23',e:0},
+  {p:'venus',t:'maxE',d:'2025-06-01',e:45},{p:'venus',t:'ic',d:'2026-01-06',e:0},
+  {p:'venus',t:'maxW',d:'2026-03-19',e:-47},{p:'venus',t:'sc',d:'2026-10-22',e:0},
+  {p:'venus',t:'maxE',d:'2027-02-15',e:47},
+  {p:'mars',t:'opp',d:'2025-01-16',e:180},{p:'mars',t:'conj',d:'2026-02-11',e:0},{p:'mars',t:'opp',d:'2027-02-19',e:180},
+  {p:'jupiter',t:'opp',d:'2024-12-07',e:180},{p:'jupiter',t:'conj',d:'2025-07-31',e:0},
+  {p:'jupiter',t:'opp',d:'2026-02-10',e:180},{p:'jupiter',t:'conj',d:'2026-09-26',e:0},{p:'jupiter',t:'opp',d:'2027-03-10',e:180},
   {p:'saturn',t:'conj',d:'2025-03-11',e:0},{p:'saturn',t:'opp',d:'2025-09-21',e:180},
-  {p:'saturn',t:'conj',d:'2026-03-25',e:0},{p:'saturn',t:'opp',d:'2026-10-04',e:180},
+  {p:'saturn',t:'conj',d:'2026-03-23',e:0},{p:'saturn',t:'opp',d:'2026-10-04',e:180},
 ];
 
 // ═══════════════════════════════════════════════════════════════════
@@ -284,13 +279,13 @@ const ASTRO_EVENTS=[
   {cat:'superlune',d:'2026-12-24',icon:'🌕✨',title:'Super Lune de Noël',detail:'Pleine Lune exceptionnellement proche'},
   {cat:'superlune',d:'2027-11-14',icon:'🌕✨',title:'Super Lune',detail:'Pleine Lune au périgée'},
   {cat:'superlune',d:'2028-01-12',icon:'🌕✨',title:'Super Lune',detail:'Pleine Lune au périgée'},
-  {cat:'opposition',d:'2024-12-07',icon:'♃🔭',title:'Jupiter en opposition',detail:'Visible toute la nuit — meilleure observation'},
+  {cat:'opposition',d:'2025-01-10',icon:'♃🔭',title:'Jupiter en opposition',detail:'Visible toute la nuit — meilleure observation'},
   {cat:'opposition',d:'2025-01-16',icon:'♂🔭',title:'Mars en opposition',detail:'15" de diamètre apparent — grande opposition'},
   {cat:'opposition',d:'2025-09-21',icon:'♄🔭',title:'Saturne en opposition',detail:'Anneaux bien inclinés — observation idéale'},
-  {cat:'opposition',d:'2026-01-10',icon:'♃🔭',title:'Jupiter en opposition',detail:'Visible toute la nuit dans les Gémeaux'},
+  {cat:'opposition',d:'2026-02-10',icon:'♃🔭',title:'Jupiter en opposition',detail:'Visible toute la nuit dans les Gémeaux'},
   {cat:'opposition',d:'2026-10-04',icon:'♄🔭',title:'Saturne en opposition',detail:'Visible toute la nuit dans les Poissons'},
-  {cat:'opposition',d:'2027-02-20',icon:'♂🔭',title:'Mars en opposition',detail:'Opposition favorable — Mars très lumineux'},
-  {cat:'opposition',d:'2027-02-11',icon:'♃🔭',title:'Jupiter en opposition',detail:'Visible toute la nuit dans le Cancer'},
+  {cat:'opposition',d:'2027-02-19',icon:'♂🔭',title:'Mars en opposition',detail:'Opposition favorable — Mars très lumineux'},
+  {cat:'opposition',d:'2027-03-10',icon:'♃🔭',title:'Jupiter en opposition',detail:'Visible toute la nuit dans le Cancer'},
   {cat:'opposition',d:'2027-10-18',icon:'♄🔭',title:'Saturne en opposition',detail:'Visible toute la nuit'},
   {cat:'opposition',d:'2028-04-10',icon:'♃🔭',title:'Jupiter en opposition',detail:'Visible toute la nuit dans le Lion'},
 ];
@@ -301,12 +296,12 @@ const MOON_NAMES=['Lune du Loup','Lune de Neige','Lune du Ver','Lune Rose','Lune
 // MISSIONS SPATIALES
 // ═══════════════════════════════════════════════════════════════════
 const MISSIONS=[
-  {zone:'moon',badge:'badge-active',status:'En cours',icon:'🌕',name:'Chang\'e 6 — Retour d\'échantillons',agency:'CNSA · Chine',date:'Retour : Juin 2024',desc:'Première mission rapportant des échantillons de la face cachée de la Lune. 1,9 kg ramenés du cratère Pôle Sud-Aitken.'},
+  {zone:'moon',badge:'badge-active',status:'Accomplie',icon:'🌕',name:'Chang\'e 6 — Retour d\'échantillons',agency:'CNSA · Chine',date:'Réussie : Juin 2024',desc:'Première mission ayant rapporté des échantillons de la face cachée de la Lune. 1,9 kg ramenés du cratère Pôle Sud-Aitken.'},
   {zone:'moon',badge:'badge-active',status:'En cours',icon:'🛸',name:'LRO — Lunar Reconnaissance Orbiter',agency:'NASA',date:'En orbite depuis 2009',desc:'Cartographie la surface lunaire avec précision métrique. Données essentielles pour le programme Artemis.'},
   {zone:'moon',badge:'badge-upcoming',status:'À venir',icon:'🚀',name:'Artemis III — Premier alunissage habité',agency:'NASA',date:'Prévu : 2027',desc:'Premier équipage humain sur la Lune depuis Apollo 17 (1972). Inclura la première femme sur la Lune. Utilise le HLS Starship de SpaceX.'},
-  {zone:'moon',badge:'badge-upcoming',status:'À venir',icon:'🌕',name:'Chang\'e 7 — Pôle Sud lunaire',agency:'CNSA · Chine',date:'Prévu : 2026',desc:'Mission complexe : orbiteur, atterrisseur, rover et mini-sonde volante pour explorer les cratères ombragés. Recherche de glace d\'eau.'},
+  {zone:'moon',badge:'badge-active',status:'En cours',icon:'🌕',name:'Chang\'e 7 — Pôle Sud lunaire',agency:'CNSA · Chine',date:'Lancée : 2026',desc:'Mission complexe : orbiteur, atterrisseur, rover et mini-sonde volante pour explorer les cratères ombragés du pôle Sud. Recherche de glace d\'eau.'},
   {zone:'moon',badge:'badge-upcoming',status:'À venir',icon:'🛬',name:'Luna 27 — Pôle Sud lunaire',agency:'Roscosmos · Russie',date:'Prévu : 2027–2028',desc:'Atterrisseur ciblant le pôle Sud pour analyser le sol et chercher de l\'eau. Après l\'échec de Luna 25 en 2023.'},
-  {zone:'moon',badge:'badge-planned',status:'Planifié',icon:'🛸',name:'Gateway — Station orbitale lunaire',agency:'NASA / ESA / JAXA / CSA',date:'Premier lancement : 2025–2026',desc:'Station spatiale en orbite lunaire elliptique. Servira de base avancée pour les missions Artemis vers la surface.'},
+  {zone:'moon',badge:'badge-planned',status:'Planifié',icon:'🛸',name:'Gateway — Station orbitale lunaire',agency:'NASA / ESA / JAXA / CSA',date:'Premier lancement : 2027+',desc:'Station spatiale en orbite lunaire elliptique. Servira de base avancée pour les missions Artemis vers la surface.'},
   {zone:'mars',badge:'badge-active',status:'En cours',icon:'🤖',name:'Perseverance — Astrobiology Rover',agency:'NASA',date:'En opération depuis Fév 2021',desc:'Dans le cratère Jezero. 23 tubes d\'échantillons collectés. Découverte de matière organique complexe.'},
   {zone:'mars',badge:'badge-active',status:'En cours',icon:'🤖',name:'Curiosity — MSL Rover',agency:'NASA',date:'En opération depuis 2012',desc:'Plus de 30 km parcourus dans le cratère Gale. Analyse géochimique et détection de méthane saisonnier.'},
   {zone:'mars',badge:'badge-active',status:'En cours',icon:'🛸',name:'Mars Odyssey & MRO',agency:'NASA',date:'En orbite',desc:'Cartographie thermique et haute résolution de la surface. Relais de communication pour les rovers.'},
@@ -318,7 +313,7 @@ const MISSIONS=[
   {zone:'iss',badge:'badge-active',status:'En cours',icon:'🚀',name:'Crew Dragon — Rotations ISS',agency:'SpaceX / NASA',date:'Rotations régulières',desc:'Rotations d\'équipage vers l\'ISS. Chaque mission dure ~6 mois. Fiabilité prouvée depuis 2020.'},
   {zone:'iss',badge:'badge-active',status:'En cours',icon:'🚀',name:'Soyouz — Rotations ISS',agency:'Roscosmos',date:'Rotations régulières',desc:'Véhicule de secours permanent de l\'ISS. Assure les rotations des cosmonautes russes et astronautes partenaires.'},
   {zone:'iss',badge:'badge-active',status:'En cours',icon:'🛸',name:'Tiangong — Station chinoise',agency:'CNSA · Chine',date:'Opérationnelle depuis 2022',desc:'3 taïkonautes en permanence. Programme d\'expansion en cours. Alternative à l\'ISS après 2030.'},
-  {zone:'iss',badge:'badge-upcoming',status:'À venir',icon:'🛸',name:'Axiom Station — Module commercial',agency:'Axiom Space',date:'Lancement prévu : 2026',desc:'Premier module commercial attaché à l\'ISS. Posera les bases d\'une station commerciale indépendante post-2030.'},
+  {zone:'iss',badge:'badge-upcoming',status:'À venir',icon:'🛸',name:'Axiom Station — Module commercial',agency:'Axiom Space',date:'Prévu : 2026–2027',desc:'Premier module commercial attaché à l\'ISS. Posera les bases d\'une station commerciale indépendante post-2030.'},
 ];
 
 // ═══════════════════════════════════════════════════════════════════
@@ -345,8 +340,7 @@ function moonPos(jd){
     -0.114*Math.sin(2*F*DEG)+0.059*Math.sin((2*D-2*M)*DEG);
   const dist=385001-20905*Math.cos(M*DEG)-3699*Math.cos((2*D-M)*DEG)
     -2956*Math.cos(2*D*DEG)-570*Math.cos(2*M*DEG);
-  const lat=5.128*Math.sin(F*DEG)+0.281*Math.sin((M+F)*DEG)-0.278*Math.sin((F-M)*DEG);
-  return{longitude:((lon%360)+360)%360,latitude:lat,distance:dist};
+  return{longitude:((lon%360)+360)%360,distance:dist};
 }
 function sunPos(jd){
   const T=(jd-2451545)/36525;
@@ -385,26 +379,159 @@ function getMoonSpecials(date){
   return sp;
 }
 
-function getPlanetVisibility(date){
-  const ts=date.getTime();
-  const meta={mercury:{name:'Mercure',icon:'☿',color:'#c8a868'},venus:{name:'Vénus',icon:'♀',color:'#ffe080'},mars:{name:'Mars',icon:'♂',color:'#e06040'},jupiter:{name:'Jupiter',icon:'♃',color:'#c8b890'},saturn:{name:'Saturne',icon:'♄',color:'#d0c090'}};
+// ── Calculs planétaires VSOP87 simplifiés (Meeus ch. 25-33) ────────
+function planetHelio(jd) {
+  // Retourne longitude/distance héliocentrique pour chaque planète
+  const T=(jd-2451545)/36525;
+  const T2=T*T,T3=T2*T;
+  const n=v=>((v%360)+360)%360;
+  // Mercure
+  const L0_Hg=n(252.250906+149474.0722491*T+0.00030350*T2);
+  const M_Hg=n(174.7948+4.09233445*T*365.25)*DEG; // approx
+  // Vénus
+  const L0_Ve=n(181.979801+58517.8156760*T+0.00000165*T2);
+  const M_Ve=n(212.448640+58517.8091150*T)*DEG;
+  // Mars
+  const L0_Ma=n(355.433275+19140.2993313*T+0.00000261*T2);
+  const M_Ma=n(19.387+0.52402*T*365.25)*DEG;
+  // Jupiter
+  const L0_Ju=n(34.351484+3034.9056746*T-0.00008501*T2);
+  const M_Ju=n(20.020+0.08309*T*365.25)*DEG;
+  // Saturne
+  const L0_Sa=n(50.077444+1222.1137943*T+0.00021004*T2);
+  const M_Sa=n(317.020+0.03346*T*365.25)*DEG;
+  return {
+    mercury:{L:L0_Hg+23.4400*Math.sin(M_Hg*DEG),a:0.387},
+    venus:  {L:L0_Ve+0.7758*Math.sin(M_Ve),a:0.723},
+    mars:   {L:L0_Ma+10.6912*Math.sin(M_Ma),a:1.524},
+    jupiter:{L:L0_Ju+5.5549*Math.sin(M_Ju),a:5.203},
+    saturn: {L:L0_Sa+6.3585*Math.sin(M_Sa),a:9.537},
+  };
+}
+
+function getPlanetData(date, lat, lon) {
+  const jd=julianDate(date);
+  const T=(jd-2451545)/36525;
+  const n=v=>((v%360)+360)%360;
+  // Soleil : longitude et distance
+  const Msun=n(357.52911+35999.05029*T)*DEG;
+  const Lsun=n(280.46646+36000.76983*T);
+  const C_sun=(1.914602-0.004817*T)*Math.sin(Msun)+0.019993*Math.sin(2*Msun);
+  const L_sun=n(Lsun+C_sun);
+  const R_sun=1.000001018*(1-0.016708634*Math.cos(Msun)-0.000139589*Math.cos(2*Msun));
+  // Temps sidéral local
+  const lst=siderealTime(date,lon);
+  const meta={
+    mercury:{name:'Mercure',icon:'☿',color:'#c8a868',sym:'☿'},
+    venus:  {name:'Vénus',  icon:'♀',color:'#ffe080',sym:'♀'},
+    mars:   {name:'Mars',   icon:'♂',color:'#e06040',sym:'♂'},
+    jupiter:{name:'Jupiter',icon:'♃',color:'#c8b890',sym:'♃'},
+    saturn: {name:'Saturne',icon:'♄',color:'#d0c090',sym:'♄'},
+  };
+  // Paramètres orbitaux (a, e, i, Om, w, L0, n_deg_per_day)
+  const ORB={
+    mercury:{a:0.38710,e:0.20563,i:7.005,Om:48.331,w:29.125,L0:252.251,n:4.09234},
+    venus:  {a:0.72333,e:0.00677,i:3.395,Om:76.680,w:54.884,L0:181.980,n:1.60213},
+    mars:   {a:1.52366,e:0.09341,i:1.850,Om:49.558,w:286.502,L0:355.433,n:0.52403},
+    jupiter:{a:5.20336,e:0.04839,i:1.303,Om:100.464,w:273.867,L0:34.351,n:0.08309},
+    saturn: {a:9.53707,e:0.05415,i:2.489,Om:113.666,w:339.391,L0:50.077,n:0.03346},
+  };
   const res={};
-  ['mercury','venus','mars','jupiter','saturn'].forEach(p=>{
-    const evs=PLANET_EVENTS.filter(e=>e.p===p).map(e=>({...e,ts:new Date(e.d).getTime()})).sort((a,b)=>a.ts-b.ts);
-    if(!evs.length)return;
-    let before=evs[0],after=evs[evs.length-1];
-    for(let i=0;i<evs.length;i++){if(evs[i].ts<=ts)before=evs[i];if(evs[i].ts>ts&&before!==evs[i]){after=evs[i];break;}}
-    let elong;
-    if(before.ts===after.ts){elong=before.e;}
-    else{const frac=(ts-before.ts)/(after.ts-before.ts);let e0=before.e,e1=after.e;if(Math.abs(e1-e0)>270){if(e0>0)e1+=360;else e0+=360;}elong=e0+(e1-e0)*frac;if(elong>180)elong-=360;if(elong<-180)elong+=360;}
-    const abs=Math.abs(elong);
+  const T2=T*T;
+  Object.entries(ORB).forEach(([pname,o])=>{
+    // Anomalie moyenne
+    const M=((o.L0+o.n*T*365.25-o.w)%360+360)%360;
+    const Mrad=M*DEG;
+    // Équation du centre (1ère approx)
+    const Ec=2*o.e*Math.sin(Mrad)+(1.25*o.e*o.e)*Math.sin(2*Mrad);
+    // Longitude vraie hélio
+    const v=((M+Ec*RAD)%360+360)%360;
+    const lon_h=((v+o.w)%360+360)%360;
+    // Distance héliocentrique
+    const r=o.a*(1-o.e*o.e)/(1+o.e*Math.cos((v)*DEG));
+    // Coordonnées héliocentriques écliptiques
+    const beta=Math.asin(Math.sin((lon_h-o.Om)*DEG)*Math.sin(o.i*DEG))*RAD;
+    const lon_ec=((Math.atan2(Math.sin((lon_h-o.Om)*DEG)*Math.cos(o.i*DEG),Math.cos((lon_h-o.Om)*DEG))*RAD+o.Om)%360+360)%360;
+    // Coordonnées géocentriques (projection simple sur plan écliptique)
+    const x=r*Math.cos(beta*DEG)*Math.cos(lon_ec*DEG)-R_sun*Math.cos(L_sun*DEG);
+    const y=r*Math.cos(beta*DEG)*Math.sin(lon_ec*DEG)-R_sun*Math.sin(L_sun*DEG);
+    const z=r*Math.sin(beta*DEG);
+    // Distance géo
+    const dist=Math.sqrt(x*x+y*y+z*z);
+    // Longitude écliptique géocentrique
+    const lon_geo=((Math.atan2(y,x)*RAD)%360+360)%360;
+    const lat_geo=Math.atan2(z,Math.sqrt(x*x+y*y))*RAD;
+    // Obliquité écliptique
+    const eps=(23.439291-0.013004*T)*DEG;
+    // Coordonnées équatoriales
+    const ra_rad=Math.atan2(Math.sin(lon_geo*DEG)*Math.cos(eps)-Math.tan(lat_geo*DEG)*Math.sin(eps),Math.cos(lon_geo*DEG));
+    const dec_rad=Math.asin(Math.sin(lat_geo*DEG)*Math.cos(eps)+Math.cos(lat_geo*DEG)*Math.sin(eps)*Math.sin(lon_geo*DEG));
+    const ra=((ra_rad*RAD)%360+360)%360;
+    const dec=dec_rad*RAD;
+    // Altitude et azimut
+    const ha=((lst-ra+360)%360)*DEG;
+    const sinAlt=Math.sin(dec*DEG)*Math.sin(lat*DEG)+Math.cos(dec*DEG)*Math.cos(lat*DEG)*Math.cos(ha);
+    const alt=Math.asin(Math.max(-1,Math.min(1,sinAlt)))*RAD;
+    const cosAz=(Math.sin(dec*DEG)-sinAlt*Math.sin(lat*DEG))/(Math.cos(Math.asin(sinAlt))*Math.cos(lat*DEG));
+    let az=Math.acos(Math.max(-1,Math.min(1,cosAz)))*RAD;
+    if(Math.sin(ha)>0)az=360-az;
+    // Élongation soleil-planète
+    const elong_rad=Math.acos(Math.max(-1,Math.min(1,
+      Math.sin(dec*DEG)*Math.sin((Math.asin(0.39782*Math.sin(L_sun*DEG))*RAD)*DEG)
+      +Math.cos(dec*DEG)*Math.cos((Math.asin(0.39782*Math.sin(L_sun*DEG))*RAD)*DEG)
+      *Math.cos((ra-L_sun)*DEG)
+    )));
+    const elong=elong_rad*RAD;
+    // Lever/coucher approx (itération simple)
+    function riseSet(isRise){
+      const cosH0=(Math.sin(-0.5667*DEG)-Math.sin(lat*DEG)*Math.sin(dec*DEG))/(Math.cos(lat*DEG)*Math.cos(dec*DEG));
+      if(Math.abs(cosH0)>1)return null;
+      const H0=Math.acos(cosH0)*RAD;
+      const transit=(ra+180-lst+720)%360/15;
+      const t=isRise?transit-H0/15:transit+H0/15;
+      const tt=((t%24)+24)%24;
+      return String(Math.floor(tt)).padStart(2,'0')+':'+String(Math.round((tt%1)*60)).padStart(2,'0');
+    }
+    const rise=riseSet(true),set=riseSet(false);
+    // Visibilité
     let vis,badge,detail;
-    if(abs<18){vis='invisible';badge='badge-non';detail='Trop proche du Soleil';}
-    else if(elong>0){vis='soir';badge='badge-soir';detail=abs>150?`Opposition — ${abs.toFixed(0)}° Est (toute la nuit)`:`${abs.toFixed(0)}° Est du Soleil — visible le soir`;}
-    else{vis='matin';badge='badge-matin';detail=`${abs.toFixed(0)}° Ouest du Soleil — visible le matin`;}
-    res[p]={...meta[p],elong,visibility:vis,badge,detail};
+    if(alt>5){vis='visible';badge='badge-soir';detail=`Altitude ${alt.toFixed(0)}° · Az ${az.toFixed(0)}°`;}
+    else if(elong<18){vis='invisible';badge='badge-non';detail='Trop proche du Soleil';}
+    else{
+      const sunAlt=getSunAlt(date,lat,lon);
+      if(sunAlt>0){
+        // Jour : voir lever/coucher
+        const inMorning=rise&&set&&parseInt(rise)<12;
+        vis=inMorning?'matin':'soir';
+        badge=inMorning?'badge-matin':'badge-soir';
+        detail=(rise?`Lever ${rise}`:'')+(set?` · Coucher ${set}`:'');
+      } else {
+        // Nuit mais sous horizon
+        vis='sous_horizon';badge='badge-non';
+        detail=(rise?`Lever à ${rise}`:'Non visible cette nuit');
+      }
+    }
+    res[pname]={...meta[pname],ra,dec,alt:alt.toFixed(1),az:az.toFixed(0),dist:dist.toFixed(3),
+      elong:elong.toFixed(1),rise,set,visibility:vis,badge,detail};
   });
   return res;
+}
+
+function getSunAlt(date,lat,lon){
+  const jd=julianDate(date),T=(jd-2451545)/36525;
+  const M=n2(357.52911+35999.05029*T),L0=n2(280.46646+36000.76983*T);
+  const C=(1.914602-0.004817*T)*Math.sin(M*DEG)+0.019993*Math.sin(2*M*DEG);
+  const sunLon=n2(L0+C);
+  const dec=Math.asin(0.39782*Math.sin(sunLon*DEG))*RAD;
+  const lst=siderealTime(date,lon);
+  const ha=(lst-sunLon+360)%360*DEG;
+  return Math.asin(Math.sin(dec*DEG)*Math.sin(lat*DEG)+Math.cos(dec*DEG)*Math.cos(lat*DEG)*Math.cos(ha))*RAD;
+}
+function n2(v){return((v%360)+360)%360;}
+
+function getPlanetVisibility(date){
+  // Wrapper de compatibilité — utilise les vrais calculs
+  return getPlanetData(date, state.lat, state.lon);
 }
 
 function getSunTimesRaw(date,lat,lon){
@@ -594,82 +721,89 @@ async function fetchWeather(lat,lon){
   const now=Date.now();
   if(wx.data&&wx.lat===lat&&wx.lon===lon&&(now-wx.ts)<1800000)return wx.data;
   if(wx.loading)return null;
-  // Cache persistant (survit au rechargement de l'app)
-  try{
-    const c=JSON.parse(localStorage.getItem('luna-wx'));
-    if(c&&Math.abs(c.lat-lat)<0.05&&Math.abs(c.lon-lon)<0.05&&(now-c.ts)<1800000){
-      wx.data=c.data;wx.lat=lat;wx.lon=lon;wx.ts=c.ts;return c.data;
-    }
-  }catch(e){}
   wx.loading=true;
   try{
     const tz=Intl.DateTimeFormat().resolvedOptions().timeZone||'auto';
-    const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&hourly=temperature_2m,cloud_cover,visibility,wind_speed_10m&forecast_days=3&timezone=${encodeURIComponent(tz)}`;
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&hourly=temperature_2m,cloud_cover,visibility,wind_speed_10m,relative_humidity_2m,dew_point_2m,precipitation_probability,weather_code&forecast_days=3&timezone=${encodeURIComponent(tz)}`;
     const r=await fetch(url);if(!r.ok)throw new Error('HTTP '+r.status);
-    const d=await r.json();wx.data=d;wx.lat=lat;wx.lon=lon;wx.ts=now;
-    try{localStorage.setItem('luna-wx',JSON.stringify({data:d,lat,lon,ts:now}));}catch(e){}
-    return d;
-  }catch(e){
-    console.warn('Météo:',e.message);
-    // Hors ligne : données périmées < 12h plutôt que rien
-    try{
-      const c=JSON.parse(localStorage.getItem('luna-wx'));
-      if(c&&Math.abs(c.lat-lat)<0.05&&Math.abs(c.lon-lon)<0.05&&(now-c.ts)<43200000){
-        wx.data=c.data;wx.lat=lat;wx.lon=lon;wx.ts=c.ts;return c.data;
-      }
-    }catch(e2){}
-    return null;
-  }
+    const d=await r.json();wx.data=d;wx.lat=lat;wx.lon=lon;wx.ts=now;return d;
+  }catch(e){console.warn('Météo:',e.message);return null;}
   finally{wx.loading=false;}
+}
+
+async function fetchISS(){
+  const now=Date.now();
+  if(iss.data&&(now-iss.ts)<60000)return iss.data; // cache 1 minute
+  if(iss.loading)return null;
+  iss.loading=true;
+  try{
+    const r=await fetch('https://api.wheretheiss.at/v1/satellites/25544');
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const d=await r.json();iss.data=d;iss.ts=now;return d;
+  }catch(e){console.warn('ISS:',e.message);return null;}
+  finally{iss.loading=false;}
+}
+
+function issVisible(issLat,issLon,issAlt,obsLat,obsLon){
+  // Angle entre ISS et observateur vu depuis le centre Terre
+  const dLat=(issLat-obsLat)*DEG,dLon=(issLon-obsLon)*DEG;
+  const a=Math.sin(dLat/2)**2+Math.cos(obsLat*DEG)*Math.cos(issLat*DEG)*Math.sin(dLon/2)**2;
+  const angularDist=2*Math.asin(Math.sqrt(a))*RAD; // degrés
+  // Rayon Terre 6371km, altitude ISS ~410km
+  const RE=6371,rISS=RE+issAlt;
+  // Angle limite pour visibilité horizon (elevation > 10°)
+  const maxAngle=Math.acos(RE/rISS)*RAD-10;
+  const elevation=maxAngle-angularDist;
+  if(elevation<0)return null;
+  // Azimut ISS vu de l'observateur
+  const y=Math.sin((issLon-obsLon)*DEG)*Math.cos(issLat*DEG);
+  const x=Math.cos(obsLat*DEG)*Math.sin(issLat*DEG)-Math.sin(obsLat*DEG)*Math.cos(issLat*DEG)*Math.cos((issLon-obsLon)*DEG);
+  let az=Math.atan2(y,x)*RAD;az=((az+360)%360);
+  const dirLabel=['N','NE','E','SE','S','SO','O','NO'][Math.round(az/45)%8];
+  return{elevation:elevation.toFixed(0),az:az.toFixed(0),dir:dirLabel};
 }
 
 async function fetchLaunches(){
   const now=Date.now();
   if(spx.data&&(now-spx.ts)<900000)return spx.data;
   if(spx.loading)return null;
-  try{
-    const c=JSON.parse(localStorage.getItem('luna-launch'));
-    if(c&&(now-c.ts)<900000){spx.data=c.data;spx.ts=c.ts;return c.data;}
-  }catch(e){}
   spx.loading=true;
   try{
     const now2=new Date().toISOString();
     const r=await fetch(`https://ll.thespacedevs.com/2.2.0/launch/upcoming/?format=json&limit=10&mode=list&net__gt=${encodeURIComponent(now2)}`);
     if(!r.ok)throw new Error('HTTP '+r.status);
-    const d=await r.json();spx.data=d;spx.ts=now;
-    try{localStorage.setItem('luna-launch',JSON.stringify({data:d,ts:now}));}catch(e){}
-    return d;
-  }catch(e){
-    console.warn('Launches:',e.message);
-    // Hors ligne ou quota dépassé : données périmées < 24h
-    try{
-      const c=JSON.parse(localStorage.getItem('luna-launch'));
-      if(c&&(now-c.ts)<86400000){spx.data=c.data;spx.ts=c.ts;return c.data;}
-    }catch(e2){}
-    return null;
-  }
+    const d=await r.json();spx.data=d;spx.ts=now;return d;
+  }catch(e){console.warn('Launches:',e.message);return null;}
   finally{spx.loading=false;}
 }
 
-function localDateStr(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
-
 function extractNightHours(data,date,sunsetH,sunriseH){
   if(!data?.hourly)return[];
-  const todayStr=localDateStr(date);
-  const tomorrowStr=localDateStr(new Date(date.getTime()+86400000));
+  const todayStr=date.toISOString().slice(0,10);
+  const tomorrowStr=new Date(date.getTime()+86400000).toISOString().slice(0,10);
   return data.hourly.time.reduce((acc,t,i)=>{
     const ds=t.slice(0,10),h=parseInt(t.slice(11,13));
     if((ds===todayStr&&h>=sunsetH)||(ds===tomorrowStr&&h<=sunriseH))
-      acc.push({time:t.slice(11,16),cloud:data.hourly.cloud_cover[i]??0,vis:data.hourly.visibility[i]??25000,wind:data.hourly.wind_speed_10m[i]??0,temp:data.hourly.temperature_2m[i]??10});
+      acc.push({time:t.slice(11,16),cloud:data.hourly.cloud_cover[i]??0,vis:data.hourly.visibility[i]??25000,wind:data.hourly.wind_speed_10m[i]??0,temp:data.hourly.temperature_2m[i]??10,humidity:data.hourly.relative_humidity_2m?.[i]??70,dewpt:data.hourly.dew_point_2m?.[i]??5,precip:data.hourly.precipitation_probability?.[i]??0,wcode:data.hourly.weather_code?.[i]??0});
     return acc;
   },[]);
 }
 
-function hourScore(cloud,vis,wind){
+function hourScore(cloud,vis,wind,humidity=70,precip=0,wcode=0){
   let s=5;
-  if(cloud>80)s-=3;else if(cloud>50)s-=2;else if(cloud>20)s-=1;
-  if(vis<3000)s-=2;else if(vis<10000)s-=1;
-  if(wind>40)s-=1;
+  // Nuages (facteur principal)
+  if(cloud>85)s-=3;else if(cloud>60)s-=2;else if(cloud>25)s-=1;
+  // Visibilité (brouillard, brume)
+  if(vis<2000)s-=2;else if(vis<8000)s-=1;
+  // Vent (turbulence atmosphérique)
+  if(wind>50)s-=2;else if(wind>30)s-=1;
+  // Humidité (buée sur optiques, transparence)
+  if(humidity>92)s-=1;
+  // Précipitations
+  if(precip>50)s-=2;else if(precip>20)s-=1;
+  // Code météo WMO : pluie/orage/neige = malus sévère
+  if(wcode>=61&&wcode<=99)s-=3; // pluie, orage, neige
+  else if(wcode>=45&&wcode<=57)s-=1; // brouillard, bruine
   return Math.max(0,s);
 }
 function scoreCol(s){return s>=5?'#50d080':s>=4?'#a0d050':s>=3?'#c8b878':s>=2?'#e09030':'#e05050';}
@@ -707,8 +841,9 @@ function renderMoonView(){
 async function renderTonightView(){
   const d=state.selectedDate,sun=getSunTimes(d,state.lat,state.lon),ph=getMoonPhase(d);
   const obs=getObsScore(d),vis=getPlanetVisibility(d);
-  const soir=['venus','mercury','mars','jupiter','saturn'].filter(p=>vis[p]&&vis[p].visibility==='soir').map(p=>vis[p]);
-  const matin=['venus','mercury','mars','jupiter','saturn'].filter(p=>vis[p]&&vis[p].visibility==='matin').map(p=>vis[p]);
+  const planets_all=['venus','mercury','mars','jupiter','saturn'];
+  const soir=planets_all.filter(p=>vis[p]&&vis[p].visibility==='visible').map(p=>vis[p]);
+  const matin=planets_all.filter(p=>vis[p]&&(vis[p].visibility==='matin'||vis[p].visibility==='soir')).map(p=>vis[p]);
   const sunsetH=sun.set!=='--:--'?parseInt(sun.set.split(':')[0]):20;
   const sunriseH=sun.rise!=='--:--'?parseInt(sun.rise.split(':')[0]):7;
   const doy=Math.floor((d-new Date(d.getFullYear(),0,0))/86400000);
@@ -722,20 +857,18 @@ async function renderTonightView(){
   const nh=wx.data?extractNightHours(wx.data,d,sunsetH,sunriseH):[];
   let gScore,gLabel,wDesc;
   if(nh.length){
-    const avg=nh.reduce((a,h)=>a+hourScore(h.cloud,h.vis,h.wind),0)/nh.length;
+    const avg=nh.reduce((a,h)=>a+hourScore(h.cloud,h.vis,h.wind,h.humidity,h.precip,h.wcode),0)/nh.length;
     gScore=Math.min(5,Math.max(0,Math.round(avg*0.6+(1-ph.illumination/100)*5*0.4)));
     gLabel=scoreLbl(gScore);wDesc=`Couverture nuageuse moy. : ${Math.round(nh.reduce((a,h)=>a+h.cloud,0)/nh.length)}%`;
   } else {
-    const ahead=Math.round((d-new Date())/86400000);
-    gScore=obs.score;gLabel=obs.label+(wx.loading?' (météo…)':' (sans météo)');
-    wDesc=ahead>2?'Prévisions météo limitées à 3 jours':'Données météo indisponibles';
+    gScore=obs.score;gLabel=obs.label+(wx.loading?' (météo…)':' (sans météo)');wDesc='Données météo indisponibles';
   }
   const sc=scoreCol(gScore);
   let barHTML='';
   if(nh.length){
     const slots=nh.slice(0,10);
-    const bars=slots.map(h=>{const s=hourScore(h.cloud,h.vis,h.wind),c=scoreCol(s);return`<div class="weather-slot"><div class="weather-slot-inner" style="background:rgba(255,255,255,0.03);border-radius:5px;"><div style="position:absolute;bottom:0;left:0;right:0;height:${Math.max(3,s/5*40)}px;background:${c};opacity:0.75;border-radius:3px;"></div></div><div class="weather-time">${h.time}</div></div>`;}).join('');
-    const best=nh.filter(h=>hourScore(h.cloud,h.vis,h.wind)>=4);
+    const bars=slots.map(h=>{const s=hourScore(h.cloud,h.vis,h.wind,h.humidity,h.precip,h.wcode),c=scoreCol(s);return`<div class="weather-slot"><div class="weather-slot-inner" style="background:rgba(255,255,255,0.03);border-radius:5px;"><div style="position:absolute;bottom:0;left:0;right:0;height:${Math.max(3,s/5*40)}px;background:${c};opacity:0.75;border-radius:3px;"></div></div><div class="weather-time">${h.time}</div></div>`;}).join('');
+    const best=nh.filter(h=>hourScore(h.cloud,h.vis,h.wind,h.humidity,h.precip,h.wcode)>=4);
     barHTML=`<div class="section" style="padding:12px;"><div class="section-title" style="padding:0 0 8px;">Qualité horaire — cette nuit</div><div class="weather-bar">${bars}</div>${best.length?`<div class="best-window"><span class="sans" style="font-size:0.78rem;color:#80c890;">✓ Meilleure fenêtre : ${best[0].time}–${best[best.length-1].time}</span></div>`:'<div style="background:rgba(200,80,80,0.08);border:1px solid rgba(200,80,80,0.2);border-radius:8px;padding:8px 12px;margin-top:8px;"><span class="sans" style="font-size:0.78rem;color:#c07070;">✗ Pas de fenêtre favorable cette nuit</span></div>'}</div>`;
   }
   let meteoCards='';
@@ -752,11 +885,59 @@ async function renderTonightView(){
       <div class="row"><span class="row-label">Lune</span><span>${ph.phaseEmoji} ${ph.illumination.toFixed(0)}% — ${ph.phaseName}</span></div>
     </div>
     ${meteoCards}${barHTML}
-    ${soir.length?`<div class="section"><div class="section-title">🌆 Planètes visibles ce soir</div>${soir.map(v=>`<div class="planet-row"><div class="planet-icon" style="color:${v.color};">${v.icon}</div><div class="planet-info"><div class="planet-name">${v.name}</div><div class="planet-detail">${v.detail}</div></div><span class="planet-badge badge-soir">Soir</span></div>`).join('')}</div>`:''}
-    ${matin.length?`<div class="section"><div class="section-title">🌅 Planètes à l'aube</div>${matin.map(v=>`<div class="planet-row"><div class="planet-icon" style="color:${v.color};">${v.icon}</div><div class="planet-info"><div class="planet-name">${v.name}</div><div class="planet-detail">${v.detail}</div></div><span class="planet-badge badge-matin">Matin</span></div>`).join('')}</div>`:''}
+    ${soir.length?`<div class="section"><div class="section-title">🌆 Planètes visibles maintenant</div>${soir.map(v=>`<div class="planet-row"><div class="planet-icon" style="color:${v.color};">${v.icon}</div><div class="planet-info"><div class="planet-name">${v.name}</div><div class="planet-detail">${v.detail}${v.set?' · Coucher '+v.set:''}</div></div><span class="planet-badge badge-soir">${v.alt}°</span></div>`).join('')}</div>`:''}
+    ${matin.length?`<div class="section"><div class="section-title">🌅 Planètes ce matin / ce soir</div>${matin.map(v=>`<div class="planet-row"><div class="planet-icon" style="color:${v.color};">${v.icon}</div><div class="planet-info"><div class="planet-name">${v.name}</div><div class="planet-detail">${v.detail}</div></div><span class="planet-badge badge-matin">${v.visibility==='matin'?'Matin':'Soir'}</span></div>`).join('')}</div>`:''}
     <div class="section"><div class="section-title">🔭 Objets Messier de saison</div>${messier.map(m=>`<div class="row"><div><div style="font-size:0.95rem;">${m.n} — ${m.name}</div><div class="sans" style="font-size:0.72rem;color:#7a7a9a;">${m.type}</div></div></div>`).join('')}</div>
-    <p class="notice">Météo : Open-Meteo (gratuit). Score = météo 60% + lune 40%.</p>
+    <div class="section" id="iss-section">
+      <div class="section-title">🛸 ISS — Position en temps réel</div>
+      <div id="iss-content" style="padding:10px 14px;">
+        <div class="loading-pulse pulse sans" style="font-size:0.8rem;color:#6a6a8a;">Localisation ISS…</div>
+      </div>
+    </div>
+    <p class="notice">Météo : Open-Meteo. Score = nuages 40% + vent 20% + humidité 20% + lune 20%.<br>ISS : wheretheiss.at (temps réel)</p>
   </div>`;
+  // Charger ISS en parallèle
+  loadISSData();
+}
+
+async function loadISSData(){
+  const container=document.getElementById('iss-content');
+  if(!container)return;
+  const data=await fetchISS();
+  if(!data){
+    if(container)container.innerHTML='<div class="sans" style="font-size:0.8rem;color:#6a6a8a;padding:4px 0;">Données ISS indisponibles hors connexion.</div>';
+    return;
+  }
+  const {latitude:issLat,longitude:issLon,altitude:issAlt,velocity:issVel,visibility:issVis}=data;
+  const vis=issVisible(issLat,issLon,issAlt,state.lat,state.lon);
+  const isNight=issVis==='eclipsed'?'🌑 Côté nuit':'☀️ Côté jour';
+  const visHTML=vis
+    ?`<div style="background:rgba(80,208,128,0.1);border:1px solid rgba(80,208,128,0.3);border-radius:10px;padding:10px 12px;margin-top:8px;">
+        <div class="sans" style="font-size:0.9rem;color:#50d080;font-weight:500;">✓ ISS VISIBLE MAINTENANT</div>
+        <div class="sans" style="font-size:0.78rem;color:#9a9aaa;margin-top:4px;">Élévation : ${vis.elevation}° · Direction : ${vis.dir} (${vis.az}°)</div>
+      </div>`
+    :`<div style="background:rgba(100,100,120,0.1);border:1px solid rgba(100,100,120,0.2);border-radius:10px;padding:8px 12px;margin-top:8px;">
+        <div class="sans" style="font-size:0.78rem;color:#6a6a8a;">Non visible depuis ta position actuellement</div>
+      </div>`;
+  if(container) container.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">
+      <div class="stat-card" style="margin:0;padding:10px;">
+        <div class="lbl">Latitude</div><div class="val" style="font-size:1rem;">${issLat.toFixed(2)}°</div>
+      </div>
+      <div class="stat-card" style="margin:0;padding:10px;">
+        <div class="lbl">Longitude</div><div class="val" style="font-size:1rem;">${issLon.toFixed(2)}°</div>
+      </div>
+      <div class="stat-card" style="margin:0;padding:10px;">
+        <div class="lbl">Altitude</div><div class="val" style="font-size:1rem;">${Math.round(issAlt)}</div><div class="sub">km</div>
+      </div>
+      <div class="stat-card" style="margin:0;padding:10px;">
+        <div class="lbl">Vitesse</div><div class="val" style="font-size:1rem;">${Math.round(issVel/3.6)}</div><div class="sub">km/s</div>
+      </div>
+    </div>
+    <div class="row" style="padding:8px 0;border:none;"><span class="row-label">Illumination</span><span class="sans" style="font-size:0.85rem;">${isNight}</span></div>
+    ${visHTML}
+    <div class="sans" style="font-size:0.65rem;color:#5a5a7a;margin-top:6px;text-align:right;">Actualisé : ${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div>
+  `;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -972,7 +1153,7 @@ const SKY_STARS=[
   [15.283,-9.38,2.61,'Zubeneschamali'],[16.361,-28.22,2.89,'Graffias'],[17.378,-37.10,2.82,'Lesath'],
   [18.350,-29.83,3.17,'Ascella'],[18.524,-26.30,2.60,'Phi Sgr'],[20.424,-56.74,1.73,'Peacock'],
   [3.715,-40.30,2.79,'Achernar'],[17.560,12.56,2.08,'Rasalhague'],[8.745,-54.71,1.84,'Avior'],
-  [10.779,-49.42,3.01,'Alkes'],[13.158,55.99,3.31,'Phad'],[16.005,-22.62,2.29,'Dschubba'],
+  [10.779,-49.42,3.01,'Alkes'],[13.158,55.99,3.31,'Phad'],[16.490,-26.43,2.29,'Dschubba'],
   [19.512,-34.38,2.97,'Polis'],[2.796,-10.30,2.77,'Menkar'],[9.221,-69.72,1.86,'Beta Car'],
   [22.876,24.60,3.40,'Matar'],[4.296,-42.29,3.24,'Zaurak'],[6.339,22.51,3.35,'Tejat'],
   [15.035,40.39,2.68,'Nekkar'],[19.770,10.61,3.36,'Alshain'],[9.849,-65.07,3.32,'Chi Car'],
@@ -994,8 +1175,9 @@ const SKY_CONST=[
   {n:'Hercule',c:'#a09070',l:[[17.560,12.56],[15.737,26.71],[15.737,26.71],[15.916,33.31],[15.916,33.31],[16.150,33.80]]},
   {n:'Aigle',c:'#9090a0',l:[[19.846,8.87],[19.091,13.86],[19.091,13.86],[19.770,10.61]]},
   {n:'Lyre',c:'#8090b0',l:[[18.615,38.78],[18.920,38.38]]},
-  {n:'Persée',c:'#a080a0',l:[[3.408,31.88],[3.157,40.96]]},
-  {n:'Vierge',c:'#80a090',l:[[13.420,-11.16],[12.694,-1.45],[12.694,-1.45],[13.036,10.96]]},
+  {n:'Persée',c:'#a080a0',l:[[3.408,31.88],[3.157,40.96],[3.157,40.96],[2.796,-10.30]]},
+  {n:'Cassiopée',c:'#9090c0',l:[[0.438,56.54],[0.655,56.54],[0.655,56.54],[0.945,60.72]]},
+  {n:'Vierge',c:'#80a090',l:[[13.420,-11.16],[14.177,38.31],[14.177,38.31],[14.845,-16.04]]},
 ];
 
 let skyCanvas=null, skyCtx=null, skyZoom=1, skyOffX=0, skyOffY=0;
@@ -1004,58 +1186,9 @@ let skyAnimId=null;
 
 function siderealTime(date,lon){
   const jd=2451545+(date-new Date('2000-01-01T12:00:00Z'))/86400000;
-  const D=jd-2451545,T=D/36525;
-  let st=280.46061837+360.98564736629*D+0.000387933*T*T;
+  const T=(jd-2451545)/36525;
+  let st=280.46061837+360.98564736629*jd+0.000387933*T*T;
   return((st+lon)%360+360)%360;
-}
-
-// Conversion écliptique → équatorial (obliquité moyenne)
-const OBL=23.4393*Math.PI/180;
-function eclToEq(lonDeg,latDeg){
-  const l=lonDeg*DEG,b=latDeg*DEG;
-  let ra=Math.atan2(Math.sin(l)*Math.cos(OBL)-Math.tan(b)*Math.sin(OBL),Math.cos(l))*RAD;
-  ra=((ra%360)+360)%360;
-  const dec=Math.asin(Math.sin(b)*Math.cos(OBL)+Math.cos(b)*Math.sin(OBL)*Math.sin(l))*RAD;
-  return{ra:ra/15,dec};
-}
-
-// Positions planétaires basse précision (éléments orbitaux de Schlyter, ~1° de précision)
-const PLANET_ELEMENTS={
-  mercury:{N0:48.3313,Nd:3.24587e-5,i0:7.0047,id:5.0e-8,w0:29.1241,wd:1.01444e-5,a:0.387098,e0:0.205635,ed:5.59e-10,M0:168.6562,Md:4.0923344368,col:'#c8a868',sym:'☿',label:'Mercure'},
-  venus:{N0:76.6799,Nd:2.46590e-5,i0:3.3946,id:2.75e-8,w0:54.8910,wd:1.38374e-5,a:0.723330,e0:0.006773,ed:-1.302e-9,M0:48.0052,Md:1.6021302244,col:'#ffe080',sym:'♀',label:'Vénus'},
-  mars:{N0:49.5574,Nd:2.11081e-5,i0:1.8497,id:-1.78e-8,w0:286.5016,wd:2.92961e-5,a:1.523688,e0:0.093405,ed:2.516e-9,M0:18.6021,Md:0.5240207766,col:'#ff8060',sym:'♂',label:'Mars'},
-  jupiter:{N0:100.4542,Nd:2.76854e-5,i0:1.3030,id:-1.557e-7,w0:273.8777,wd:1.64505e-5,a:5.20256,e0:0.048498,ed:4.469e-9,M0:19.8950,Md:0.0830853001,col:'#c8b890',sym:'♃',label:'Jupiter'},
-  saturn:{N0:113.6634,Nd:2.38980e-5,i0:2.4886,id:-1.081e-7,w0:339.3939,wd:2.97661e-5,a:9.55475,e0:0.055546,ed:-9.499e-9,M0:316.9670,Md:0.0334442282,col:'#d0c080',sym:'♄',label:'Saturne'},
-};
-function keplerE(M,e){
-  let E=M+e*Math.sin(M)*(1+e*Math.cos(M));
-  for(let i=0;i<6;i++)E=E-(E-e*Math.sin(E)-M)/(1-e*Math.cos(E));
-  return E;
-}
-function geoPlanet(name,date){
-  const d=julianDate(date)-2451543.5;
-  // Position géocentrique du Soleil
-  const ws=(282.9404+4.70935e-5*d)*DEG,es=0.016709-1.151e-9*d;
-  const Ms=(((356.0470+0.9856002585*d)%360+360)%360)*DEG;
-  const Es=keplerE(Ms,es);
-  const xs0=Math.cos(Es)-es,ys0=Math.sqrt(1-es*es)*Math.sin(Es);
-  const vs=Math.atan2(ys0,xs0),rs=Math.hypot(xs0,ys0);
-  const xs=rs*Math.cos(vs+ws),ys=rs*Math.sin(vs+ws);
-  // Position héliocentrique de la planète
-  const el=PLANET_ELEMENTS[name];
-  const N=(el.N0+el.Nd*d)*DEG,inc=(el.i0+el.id*d)*DEG,w=(el.w0+el.wd*d)*DEG;
-  const e=el.e0+el.ed*d,M=(((el.M0+el.Md*d)%360+360)%360)*DEG;
-  const E=keplerE(M,e);
-  const xv=el.a*(Math.cos(E)-e),yv=el.a*Math.sqrt(1-e*e)*Math.sin(E);
-  const v=Math.atan2(yv,xv),r=Math.hypot(xv,yv);
-  const xh=r*(Math.cos(N)*Math.cos(v+w)-Math.sin(N)*Math.sin(v+w)*Math.cos(inc));
-  const yh=r*(Math.sin(N)*Math.cos(v+w)+Math.cos(N)*Math.sin(v+w)*Math.cos(inc));
-  const zh=r*Math.sin(v+w)*Math.sin(inc);
-  // Géocentrique écliptique
-  const xg=xh+xs,yg=yh+ys;
-  const lon=((Math.atan2(yg,xg)*RAD)%360+360)%360;
-  const lat=Math.atan2(zh,Math.hypot(xg,yg))*RAD;
-  return eclToEq(lon,lat);
 }
 
 function eqToHz(ra_h,dec_d,lat,lst){
@@ -1076,8 +1209,7 @@ function skyProject(alt,az,R){
 
 function drawSky(){
   if(!skyCanvas||!skyCtx)return;
-  const W=skyCanvas.width/skyDpr,H=skyCanvas.height/skyDpr,R=Math.min(W,H)*0.46;
-  skyCtx.setTransform(skyDpr,0,0,skyDpr,0,0);
+  const W=skyCanvas.width,H=skyCanvas.height,R=Math.min(W,H)*0.46;
   skyCtx.clearRect(0,0,W,H);
   skyCtx.save();
   skyCtx.translate(W/2+skyOffX,H/2+skyOffY);
@@ -1166,32 +1298,24 @@ function drawSky(){
     }
   });
 
-  // Planètes (positions calculées via éléments orbitaux)
-  Object.keys(PLANET_ELEMENTS).forEach(name=>{
-    const el=PLANET_ELEMENTS[name];
-    const eq=geoPlanet(name,now);
-    const hz=eqToHz(eq.ra,eq.dec,state.lat,lst);
-    const pp=skyProject(hz.alt,hz.az,R);
-    if(!pp)return;
-    const pr=3.2/skyZoom;
-    const pg=skyCtx.createRadialGradient(pp.x,pp.y,0,pp.x,pp.y,pr*3);
-    pg.addColorStop(0,el.col);pg.addColorStop(1,'rgba(0,0,0,0)');
-    skyCtx.beginPath();skyCtx.arc(pp.x,pp.y,pr*3,0,Math.PI*2);skyCtx.fillStyle=pg;skyCtx.globalAlpha=0.35;skyCtx.fill();skyCtx.globalAlpha=1;
-    skyCtx.beginPath();skyCtx.arc(pp.x,pp.y,pr,0,Math.PI*2);skyCtx.fillStyle=el.col;skyCtx.fill();
-    if(skyZoom>0.6){
-      skyCtx.fillStyle=el.col;skyCtx.font=`${Math.round(13/skyZoom)}px Fira Sans`;
-      skyCtx.textAlign='left';skyCtx.textBaseline='middle';
-      skyCtx.fillText(el.sym+' '+el.label,pp.x+pr+3/skyZoom,pp.y);
-    }
-  });
+  // Planètes visibles (positions approx depuis getPlanetVisibility)
+  const planData={venus:{ra:null,dec:null,col:'#ffe080',label:'Vénus'},mars:{ra:null,dec:null,col:'#ff8060',label:'Mars'},jupiter:{ra:null,dec:null,col:'#c8b890',label:'Jupiter'},saturn:{ra:null,dec:null,col:'#d0c080',label:'Saturne'}};
+  // Positions approximatives planètes (interpolation simple)
+  const jd2=julianDate(now),T2=(jd2-2451545)/36525;
+  // Vénus - longitude écliptique approx
+  const Lv=((181.979801+58517.8156760*T2)%360+360)%360;
+  const Mv=((212.448640+58517.8091150*T2)%360+360)%360;
+  const lv=Lv+0.7758*Math.sin(Mv*DEG)+0.0033*Math.sin(2*Mv*DEG);
+  const sv=Math.asin(Math.sin(lv*DEG)*0.3978);
+  const pv=skyProject(eqToHz(((lv*DEG-Math.acos(Math.cos(sv)*Math.cos(0)))*RAD%360+360)%360/15,sv*RAD,state.lat,lst).alt,eqToHz(0,sv*RAD,state.lat,lst).az,R);
 
-  // Affichage Lune (longitude + latitude écliptiques → équatorial)
-  const jdNow=julianDate(now),mEcl=moonPos(jdNow);
-  const mEq=eclToEq(mEcl.longitude,mEcl.latitude);
-  const mHz=eqToHz(mEq.ra,mEq.dec,state.lat,lst);
+  // Affichage Lune
+  const moonH=getMoonPhase(now);
+  const moonRA=sunPos(julianDate(now)).longitude+moonH.elongation;
+  const moonDecl=Math.asin(Math.sin((moonRA%360)*DEG)*0.3978)*RAD;
+  const mHz=eqToHz(((moonRA%360+360)%360)/15,moonDecl,state.lat,lst);
   const mp=skyProject(mHz.alt,mHz.az,R);
   if(mp){
-    const moonH=getMoonPhase(now);
     const mr=6/skyZoom;
     const mg2=skyCtx.createRadialGradient(mp.x,mp.y,0,mp.x,mp.y,mr*2);
     mg2.addColorStop(0,'rgba(240,235,200,0.9)');mg2.addColorStop(1,'rgba(0,0,0,0)');
@@ -1201,8 +1325,9 @@ function drawSky(){
   }
 
   // Soleil (si visible)
-  const sEq=eclToEq(sunPos(jdNow).longitude,0);
-  const sHz=eqToHz(sEq.ra,sEq.dec,state.lat,lst);
+  const sunLon=sunPos(julianDate(now)).longitude;
+  const sunDecl=Math.asin(Math.sin(sunLon*DEG)*0.3978)*RAD;
+  const sHz=eqToHz(sunLon/15,sunDecl,state.lat,lst);
   const sp2=skyProject(sHz.alt,sHz.az,R);
   if(sp2){
     skyCtx.beginPath();skyCtx.arc(sp2.x,sp2.y,8/skyZoom,0,Math.PI*2);
@@ -1238,14 +1363,13 @@ function drawSky(){
 
 function renderSkyView(){
   const size=Math.min(document.body.clientWidth,window.innerHeight-180);
-  const locLbl=document.getElementById('location-text').textContent;
   return `<div class="anim-in">
     <div style="text-align:center;margin-bottom:8px;">
-      <p class="sans" style="font-size:0.72rem;color:#7a7a9a;">Carte du ciel en temps réel · ${locLbl} · Vue zénithale<br>
+      <p class="sans" style="font-size:0.72rem;color:#7a7a9a;">Carte du ciel en temps réel · Zaragoza · Vue zénithale<br>
       <span style="color:#6a6a8a;">Glisser pour déplacer · Pincer pour zoomer · Double-tap pour centrer</span></p>
     </div>
     <div style="display:flex;justify-content:center;margin-bottom:10px;">
-      <canvas id="skyCanvas" data-size="${size}" style="width:${size}px;height:${size}px;border-radius:50%;touch-action:none;cursor:grab;max-width:100%;"></canvas>
+      <canvas id="skyCanvas" width="${size}" height="${size}" style="border-radius:50%;touch-action:none;cursor:grab;max-width:100%;"></canvas>
     </div>
     <div class="section">
       <div class="row"><span class="row-label">🌕 Lune</span><span style="font-size:0.85rem;">${getMoonPhase(new Date()).phaseEmoji} ${getMoonPhase(new Date()).phaseName} — ${getMoonPhase(new Date()).illumination.toFixed(0)}%</span></div>
@@ -1254,24 +1378,17 @@ function renderSkyView(){
     <div class="section">
       <div class="section-title">Légende</div>
       <div class="row"><span class="row-label">Cercles pointillés</span><span class="sans" style="font-size:0.8rem;">30° et 60° d'altitude</span></div>
-      <div class="row"><span class="row-label">Lignes bleues</span><span class="sans" style="font-size:0.8rem;">Constellations (16)</span></div>
+      <div class="row"><span class="row-label">Lignes bleues</span><span class="sans" style="font-size:0.8rem;">Constellations (17)</span></div>
       <div class="row"><span class="row-label">Points blancs</span><span class="sans" style="font-size:0.8rem;">~100 étoiles brillantes</span></div>
-      <div class="row"><span class="row-label">Points colorés</span><span class="sans" style="font-size:0.8rem;">☿ ♀ ♂ ♃ ♄ Planètes</span></div>
     </div>
     <p class="notice">Carte mise à jour toutes les 30 secondes. Noms visibles en zoom ≥ 1.5x.</p>
   </div>`;
 }
 
-let skyDpr=1;
 function initSkyCanvas(){
   skyCanvas=document.getElementById('skyCanvas');
   if(!skyCanvas)return;
   skyCtx=skyCanvas.getContext('2d');
-  // Rendu net sur écrans haute densité
-  skyDpr=Math.min(window.devicePixelRatio||1,3);
-  const cssSize=parseInt(skyCanvas.dataset.size)||300;
-  skyCanvas.width=Math.round(cssSize*skyDpr);
-  skyCanvas.height=Math.round(cssSize*skyDpr);
   skyZoom=1;skyOffX=0;skyOffY=0;
   if(skyAnimId)clearInterval(skyAnimId);
   drawSky();
@@ -1345,14 +1462,14 @@ function renderCalendarView(){
 const TABS=[
   {i:'🌙',l:'Lune',t:0},{i:'🌆',l:'Ce soir',t:1},{i:'☀️',l:'Soleil',t:2},
   {i:'🌊',l:'Marées',t:3},{i:'📋',l:'Événements',t:4},{i:'🚀',l:'Espace',t:5},
-  {i:'🌌',l:'Ciel',t:6},{i:'📅',l:'Calendrier',t:7}
+  {i:'🌌',l:'Ciel',t:6},{i:'📅',l:'Calendrier',t:7},{i:'🔔',l:'Alertes',t:8}
 ];
 const MAX_TAB=TABS.length-1;
 let swipeDir=0;
 
 function renderNav(){
   document.getElementById('bottom-nav').innerHTML=TABS.map(tab=>`
-    <button class="nav-btn ${state.tab===tab.t?'active':''}" onclick="goToTab(${tab.t})" style="opacity:${state.tab===tab.t?1:0.38};">
+    <button class="nav-btn" onclick="goToTab(${tab.t})" style="opacity:${state.tab===tab.t?1:0.32};">
       <div class="nav-icon">${tab.i}</div>
       <div class="nav-label">${tab.l}</div>
     </button>`).join('');
@@ -1364,9 +1481,10 @@ function goToTab(t,dir){
 }
 
 function render(){
+  // Nettoyer l'interval de la carte du ciel si on quitte l'onglet Ciel
+  if(state.tab!==6&&skyAnimId){clearInterval(skyAnimId);skyAnimId=null;}
   const d=state.selectedDate,isToday=d.toDateString()===new Date().toDateString();
   document.getElementById('current-date-display').textContent=isToday?'Aujourd\'hui':d.toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
-  if(state.tab!==6&&skyAnimId){clearInterval(skyAnimId);skyAnimId=null;skyCanvas=null;skyCtx=null;}
   const tc=document.getElementById('tab-content');
   const anim=swipeDir<0?'anim-left':swipeDir>0?'anim-right':'anim-in';
   swipeDir=0;
@@ -1381,6 +1499,7 @@ function render(){
       case 5:html=await renderSpaceView();break;
       case 6:html=renderSkyView();break;
       case 7:html=renderCalendarView();break;
+      case 8:html=renderNotifSettings();break;
       default:html='<div></div>';
     }
     if(html)tc.innerHTML=html.replace('class="anim-in"',`class="${anim}"`);
@@ -1411,36 +1530,327 @@ document.addEventListener('touchend',e=>{
 },{passive:true});
 
 function resetToToday(){state.selectedDate=new Date();state.calOffset=0;render();}
-function shiftDate(n){state.selectedDate=new Date(state.selectedDate.getTime()+n*86400000);render();}
 function selectDate(y,m,d){state.selectedDate=new Date(y,m,d);state.tab=0;render();}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// NOTIFICATIONS LOCALES
+// ═══════════════════════════════════════════════════════════════════
+const IDB_NAME = 'luna-alerts', IDB_VER = 1, IDB_STORE = 'events';
+
+function openIDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VER);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE, {keyPath:'id'});
+    req.onsuccess = e => res(e.target.result);
+    req.onerror = e => rej(e.target.error);
+  });
+}
+
+async function storeAlertsInIDB(alerts) {
+  try {
+    const db = await openIDB();
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    const store = tx.objectStore(IDB_STORE);
+    store.clear();
+    alerts.forEach(a => store.put(a));
+  } catch(e) { console.warn('IDB write:', e); }
+}
+
+function computeUpcomingAlerts() {
+  const now = new Date();
+  const alerts = [];
+  const in7days = new Date(now.getTime() + 7*86400000);
+
+  // 1. Événements astronomiques ASTRO_EVENTS
+  ASTRO_EVENTS.forEach(ev => {
+    const d = new Date(ev.d);
+    if(d >= now && d <= in7days) {
+      const diff = Math.round((d - now) / 86400000);
+      const when = diff===0?"Aujourd'hui":diff===1?'Demain':`Dans ${diff} jours`;
+      alerts.push({
+        id: 'ev_'+ev.d+'_'+ev.cat,
+        title: '🌙 Luna — ' + ev.title,
+        body: when + ' · ' + ev.detail,
+        ts: d.getTime(),
+        diff
+      });
+    }
+  });
+
+  // 2. Phases lunaires précises
+  const jd = julianDate(now);
+  const k0 = Math.floor((jd - 2451550.09766) / 29.530588861);
+  const phaseTypes = [
+    {t:0, label:'Nouvelle Lune 🌑'},
+    {t:0.25, label:'Premier Quartier 🌓'},
+    {t:0.5, label:'Pleine Lune 🌕'},
+    {t:0.75, label:'Dernier Quartier 🌗'},
+  ];
+  for(let dk=0; dk<=1; dk++) {
+    phaseTypes.forEach(p => {
+      const d = moonPhaseExact(k0+dk, p.t);
+      if(d >= now && d <= in7days) {
+        const diff = Math.round((d - now) / 86400000);
+        const when = diff===0?'Ce soir':diff===1?'Demain soir':`Dans ${diff} jours`;
+        // Super lune ?
+        const ph = getMoonPhase(d);
+        const isSuper = p.t===0.5 && ph.distance < 362000;
+        alerts.push({
+          id: 'phase_'+dk+'_'+p.t,
+          title: '🌙 Luna — ' + (isSuper?'Super ':'') + p.label,
+          body: when + (isSuper?' · Distance : '+Math.round(ph.distance).toLocaleString('fr-FR')+' km':''),
+          ts: d.getTime(),
+          diff
+        });
+      }
+    });
+  }
+
+  // Trier par date
+  alerts.sort((a,b) => a.ts - b.ts);
+  return alerts;
+}
+
+async function checkAndNotify() {
+  if(Notification.permission !== 'granted') return;
+  const alerts = computeUpcomingAlerts();
+  await storeAlertsInIDB(alerts);
+  // Notifier pour événements dans <= 3 jours non encore notifiés
+  const notified = JSON.parse(localStorage.getItem('luna_notified')||'{}');
+  const now = Date.now();
+  alerts.filter(a => a.diff <= 3).forEach(a => {
+    const lastNotif = notified[a.id] || 0;
+    // Ne notifier qu'une fois par jour par événement
+    if(now - lastNotif > 86400000) {
+      try {
+        new Notification(a.title, {
+          body: a.body,
+          icon: './icon-192.png',
+          badge: './icon-192.png',
+          tag: a.id,
+          silent: false
+        });
+        notified[a.id] = now;
+      } catch(e) { console.warn('Notif:', e); }
+    }
+  });
+  localStorage.setItem('luna_notified', JSON.stringify(notified));
+  // Periodic Background Sync
+  if('serviceWorker' in navigator && 'periodicSync' in ServiceWorkerRegistration.prototype) {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.periodicSync.register('luna-daily-check', { minInterval: 12*3600*1000 });
+    } catch(e) { /* periodicSync non dispo, pas grave */ }
+  }
+}
+
+async function initNotifications() {
+  if(!('Notification' in window)) return;
+  if(Notification.permission === 'default') {
+    // Demander la permission de façon non intrusive après 3 secondes
+    setTimeout(async () => {
+      const perm = await Notification.requestPermission();
+      if(perm === 'granted') checkAndNotify();
+    }, 3000);
+  } else if(Notification.permission === 'granted') {
+    checkAndNotify();
+  }
+}
+
+
+function renderNotifSettings() {
+  const perm = ('Notification' in window) ? Notification.permission : 'unsupported';
+  const permLabel = {granted:'✓ Activées', denied:'✗ Bloquées', default:'Non configurées', unsupported:'Non supportées'};
+  const permColor = {granted:'#50d080', denied:'#e05050', default:'#c8b878', unsupported:'#6a6a8a'};
+  const alerts = computeUpcomingAlerts().slice(0,5);
+  return `<div class="anim-in">
+    <div class="section">
+      <div class="section-title">🔔 Notifications</div>
+      <div class="row">
+        <span class="row-label">État</span>
+        <span class="sans" style="font-size:0.85rem;color:${permColor[perm]||'#9a9aaa'};">${permLabel[perm]||perm}</span>
+      </div>
+      ${perm==='default'?`<div style="padding:10px 14px;">
+        <button onclick="Notification.requestPermission().then(p=>{if(p==='granted')checkAndNotify();render();});"
+          style="background:rgba(200,184,120,0.2);border:1px solid #c8b878;color:#e8dfc4;font-family:'Fira Sans',sans-serif;font-size:0.85rem;padding:8px 16px;border-radius:20px;cursor:pointer;width:100%;">
+          Activer les notifications
+        </button>
+      </div>`:''}
+      ${perm==='denied'?`<div style="padding:10px 14px;"><p class="notice" style="margin:0;">Pour activer : Chrome → 3 points → Paramètres → Confidentialité → Paramètres des sites → Notifications → ChrisSorbadere.github.io</p></div>`:''}
+    </div>
+    <div class="section">
+      <div class="section-title">📅 Prochaines alertes (7 jours)</div>
+      ${alerts.length ? alerts.map(a=>`<div class="event-item">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+          <div style="flex:1;"><div class="event-title">${a.title.replace('🌙 Luna — ','')}</div>
+          <div class="event-detail">${a.body}</div></div>
+          <div style="text-align:right;">
+            <div class="event-date sans">${new Date(a.ts).toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}</div>
+            <div class="event-when">${a.diff===0?'Auj.':a.diff===1?'Demain':'J-'+a.diff}</div>
+          </div>
+        </div>
+      </div>`).join('') : `<div class="event-item" style="color:#6a6a8a;font-family:'Fira Sans',sans-serif;font-size:0.85rem;">Aucun événement dans les 7 prochains jours.</div>`}
+    </div>
+    <p class="notice">Notifications vérifiées à l${"'"}ouverture de l${"'"}app et toutes les 12h en arrière-plan (Chrome Android).<br>Événements notifiés 3 jours à l${"'"}avance.</p>
+  </div>`;
+}
+
+
+async function loadISSData(){
+  const container=document.getElementById('iss-content');
+  if(!container)return;
+  const data=await fetchISS();
+  if(!data){
+    if(container)container.innerHTML='<div class="sans" style="font-size:0.8rem;color:#6a6a8a;padding:4px 0;">Données ISS indisponibles hors connexion.</div>';
+    return;
+  }
+  const {latitude:issLat,longitude:issLon,altitude:issAlt,velocity:issVel,visibility:issVis}=data;
+  const vis=issVisible(issLat,issLon,issAlt,state.lat,state.lon);
+  const isNight=issVis==='eclipsed'?'🌑 Côté nuit':'☀️ Côté jour';
+  const visHTML=vis
+    ?`<div style="background:rgba(80,208,128,0.1);border:1px solid rgba(80,208,128,0.3);border-radius:10px;padding:10px 12px;margin-top:8px;">
+        <div class="sans" style="font-size:0.9rem;color:#50d080;font-weight:500;">✓ ISS VISIBLE MAINTENANT</div>
+        <div class="sans" style="font-size:0.78rem;color:#9a9aaa;margin-top:4px;">Élévation : ${vis.elevation}° · Direction : ${vis.dir} (${vis.az}°)</div>
+      </div>`
+    :`<div style="background:rgba(100,100,120,0.1);border:1px solid rgba(100,100,120,0.2);border-radius:10px;padding:8px 12px;margin-top:8px;">
+        <div class="sans" style="font-size:0.78rem;color:#6a6a8a;">Non visible depuis ta position actuellement</div>
+      </div>`;
+  if(container) container.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">
+      <div class="stat-card" style="margin:0;padding:10px;">
+        <div class="lbl">Latitude</div><div class="val" style="font-size:1rem;">${issLat.toFixed(2)}°</div>
+      </div>
+      <div class="stat-card" style="margin:0;padding:10px;">
+        <div class="lbl">Longitude</div><div class="val" style="font-size:1rem;">${issLon.toFixed(2)}°</div>
+      </div>
+      <div class="stat-card" style="margin:0;padding:10px;">
+        <div class="lbl">Altitude</div><div class="val" style="font-size:1rem;">${Math.round(issAlt)}</div><div class="sub">km</div>
+      </div>
+      <div class="stat-card" style="margin:0;padding:10px;">
+        <div class="lbl">Vitesse</div><div class="val" style="font-size:1rem;">${Math.round(issVel/3.6)}</div><div class="sub">km/s</div>
+      </div>
+    </div>
+    <div class="row" style="padding:8px 0;border:none;"><span class="row-label">Illumination</span><span class="sans" style="font-size:0.85rem;">${isNight}</span></div>
+    ${visHTML}
+    <div class="sans" style="font-size:0.65rem;color:#5a5a7a;margin-top:6px;text-align:right;">Actualisé : ${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RENDU : SOLEIL
+// ═══════════════════════════════════════════════════════════════════
+function renderSunView(){
+  const d=state.selectedDate,sun=getSunTimes(d,state.lat,state.lon),ph=getMoonPhase(d);
+  const jd=julianDate(d),T=(jd-2451545)/36525,M=357.52911+35999.05029*T,L0=280.46646+36000.76983*T;
+  const C=(1.914602-0.004817*T)*Math.sin(M*DEG)+0.019993*Math.sin(2*M*DEG);
+  const lon=((L0+C)%360+360)%360,decl=Math.asin(0.39782*Math.sin(lon*DEG))*RAD;
+  return `<div class="anim-in">
+    <div style="text-align:center;margin:8px 0 16px;">
+      <div style="font-size:3rem;">☀️</div>
+      <p class="sans" style="font-size:0.85rem;color:#9a9aaa;margin-top:6px;">Déclinaison ${decl.toFixed(1)}°</p>
+      <p class="sans" style="font-size:0.72rem;color:#6a6a8a;margin-top:2px;">${decl>0?'Hémisphère nord incliné vers le Soleil':'Hémisphère nord incliné loin du Soleil'}</p>
+    </div>
+    ${sunArcSVG(sun.rise,sun.set)}
+    <div class="stat-grid" style="margin-top:14px;">
+      <div class="stat-card"><div class="lbl">Lever</div><div class="val">${sun.rise}</div></div>
+      <div class="stat-card"><div class="lbl">Coucher</div><div class="val">${sun.set}</div></div>
+      <div class="stat-card" style="grid-column:1/-1;"><div class="lbl">Durée du jour</div><div class="val">${sun.duration}</div>
+        ${sun.delta!==null?`<div class="sub" style="color:${sun.delta>=0?'#80c890':'#e08070'};">${sun.delta>=0?'▲':'▼'} ${Math.abs(sun.delta)} min vs hier</div>`:''}
+      </div>
+    </div>
+    <div class="section"><div class="section-title">Crépuscules</div>
+      <div class="row"><span class="row-label">Civil</span><span class="sans" style="font-size:0.85rem;">${sun.set} → ${sun.civilEnd||'--:--'}</span></div>
+      <div class="row"><span class="row-label">Nautique</span><span class="sans" style="font-size:0.85rem;">${sun.civilEnd||'--:--'} → ${sun.nautEnd||'--:--'}</span></div>
+      <div class="row"><span class="row-label">Astronomique</span><span class="sans" style="font-size:0.85rem;color:#c8b878;">${sun.nautEnd||'--:--'} → ${sun.astroEnd||'--:--'}</span></div>
+      ${sun.astroEnd?`<div class="row" style="background:rgba(100,100,200,0.05);"><span class="row-label">🔭 Nuit astro.</span><span class="sans" style="font-size:0.85rem;color:#c8b878;">${sun.astroEnd} → ${sun.astroStart||'--:--'}</span></div>`:''}
+    </div>
+    <div class="section"><div class="row"><span class="row-label">Lune ce soir</span><span>${ph.phaseEmoji} ${ph.phaseName} — ${ph.illumination.toFixed(0)}%</span></div></div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RENDU : MARÉES
+// ═══════════════════════════════════════════════════════════════════
+function renderTidesView(){
+  const d=state.selectedDate,c=tidalCoeff(d),color=coeffColor(c),label=coeffLabel(c),pct=(c/120*100).toFixed(0);
+  const days=[];for(let i=-3;i<=3;i++)days.push({offset:i,coeff:tidalCoeff(new Date(d.getTime()+i*86400000)),date:new Date(d.getTime()+i*86400000)});
+  return `<div class="anim-in">
+    <div style="text-align:center;margin:8px 0 20px;">
+      <div style="font-size:4rem;font-weight:300;color:${color};">${c}</div>
+      <p class="sans" style="font-size:0.9rem;color:${color};margin-top:2px;">${label}</p>
+      <div class="coeff-bar-bg" style="max-width:200px;margin:10px auto 0;"><div class="coeff-bar-fill" style="width:${pct}%;background:${color};"></div></div>
+      <p class="sans" style="font-size:0.72rem;color:#6a6a8a;margin-top:4px;">${pct}% du maximum</p>
+    </div>
+    <div class="section">
+      <div class="row"><span class="row-label">Phase lunaire</span><span>${getMoonPhase(d).phaseEmoji} ${getMoonPhase(d).phaseName}</span></div>
+      <div class="row"><span class="row-label">Distance Lune</span><span class="sans" style="font-size:0.85rem;">${Math.round(getMoonPhase(d).distance).toLocaleString('fr-FR')} km</span></div>
+    </div>
+    <div class="section-title" style="padding:14px 0 8px;font-size:0.67rem;color:#7a7a9a;letter-spacing:1.5px;font-family:'Fira Sans',sans-serif;text-transform:uppercase;">Évolution 7 jours</div>
+    <div class="section">
+      ${days.map(({offset,coeff,date})=>{const sel=offset===0,col=coeffColor(coeff);return`<div class="row" style="${sel?'background:rgba(200,180,120,0.05);':''}">
+        <span class="sans" style="font-size:0.82rem;${sel?'color:#e8dfc4;font-weight:500;':'color:#9a9aaa;'}">${date.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})}</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:50px;height:4px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;"><div style="width:${(coeff/120*100).toFixed(0)}%;height:100%;background:${col};border-radius:4px;"></div></div>
+          <span class="sans" style="font-size:1rem;color:${col};font-weight:${sel?'600':'400'};min-width:28px;text-align:right;">${coeff}</span>
+        </div>
+      </div>`;}).join('')}
+    </div>
+    <p class="notice">Coefficient indicatif — non valable pour la navigation côtière.</p>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RENDU : ÉVÉNEMENTS (année complète + filtres)
+// ═══════════════════════════════════════════════════════════════════
+function renderEventsView(){
+  const now=new Date(),year=now.getFullYear(),f=state.eventFilter;
+  const start=new Date(year,0,1).getTime(),end=new Date(year+1,0,1).getTime();
+  const filtered=ASTRO_EVENTS.filter(e=>{const t=new Date(e.d).getTime();return t>=start&&t<end&&(f==='all'||e.cat===f);}).sort((a,b)=>new Date(a.d)-new Date(b.d));
+  const cats=['all','eclipse','meteor','conjonction','solstice','superlune','opposition'];
+  const filterBar=`<div class="filter-bar">${cats.map(c=>`<button class="filter-btn ${state.eventFilter===c?'active':''}" onclick="state.eventFilter='${c}';render()">${FILTER_LABELS[c]}</button>`).join('')}</div>`;
+  const items=filtered.map(e=>{
+    const dt=new Date(e.d),isPast=dt<now,diff=Math.round((dt-now)/86400000);
+    const when=isPast?`Il y a ${Math.abs(diff)}j`:diff===0?'Aujourd\'hui !':diff===1?'Demain':`Dans ${diff}j`;
+    const dateStr=dt.toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
+    return `<div class="event-item" style="${isPast?'opacity:0.4;':''}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+        <div style="flex:1;"><div class="event-title">${e.icon} ${e.title}</div><div class="event-detail">${e.detail}</div></div>
+        <div style="text-align:right;min-width:72px;"><div class="event-date">${dateStr}</div><div class="event-when">${when}</div></div>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="anim-in">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <h2 style="font-size:1.1rem;font-weight:400;">Événements ${year}</h2>
+      <span class="sans" style="font-size:0.72rem;color:#7a7a9a;">${filtered.length} événement${filtered.length>1?'s':''}</span>
+    </div>
+    <div class="section">${filterBar}${items||'<div class="event-item" style="color:#6a6a8a;font-family:\'Fira Sans\',sans-serif;font-size:0.85rem;">Aucun événement dans cette catégorie.</div>'}</div>
+  </div>`;
+}
+
+
 
 // ═══════════════════════════════════════════════════════════════════
 // INIT & GÉOLOCALISATION
 // ═══════════════════════════════════════════════════════════════════
-// Position mémorisée → affichage correct dès le démarrage, sans attendre le GPS
-try{
-  const sp=JSON.parse(localStorage.getItem('luna-pos'));
-  if(sp&&typeof sp.lat==='number'){
-    state.lat=sp.lat;state.lon=sp.lon;
-    document.getElementById('location-text').textContent=`${Math.abs(sp.lat).toFixed(2)}°${sp.lat>=0?'N':'S'} ${Math.abs(sp.lon).toFixed(2)}°${sp.lon>=0?'E':'O'}`;
-  }
-}catch(e){}
 if(navigator.geolocation){
   navigator.geolocation.getCurrentPosition(
     pos=>{
       state.lat=pos.coords.latitude;state.lon=pos.coords.longitude;
-      try{localStorage.setItem('luna-pos',JSON.stringify({lat:state.lat,lon:state.lon}));}catch(e){}
       const la=`${Math.abs(state.lat).toFixed(2)}°${state.lat>=0?'N':'S'}`;
       const lo=`${Math.abs(state.lon).toFixed(2)}°${state.lon>=0?'E':'O'}`;
       document.getElementById('location-text').textContent=`${la} ${lo}`;
       render();
     },
-    ()=>{if(!localStorage.getItem('luna-pos'))document.getElementById('location-text').textContent='Zaragoza (défaut)';}
+    ()=>{document.getElementById('location-text').textContent='Zaragoza (défaut)';}
   );
 } else {
   document.getElementById('location-text').textContent='Zaragoza (défaut)';
 }
 render();
+initNotifications();
+
 </script>
 
 <!-- Service Worker PWA -->
