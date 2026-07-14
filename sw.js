@@ -1,5 +1,5 @@
 // Luna Pro — Service Worker v4 (avec periodicSync notifications)
-const CACHE_NAME = 'luna-pro-v5';
+const CACHE_NAME = 'luna-pro-v6';
 
 const PRECACHE_ASSETS = [
   './index.html',
@@ -37,6 +37,11 @@ self.addEventListener('fetch', event => {
     return;
   }
   if (url.hostname.includes('googleapis.com') || url.hostname.includes('gstatic.com')) {
+    event.respondWith(networkFirst(event.request));
+    return;
+  }
+  // index.html et racine → network-first : les mises à jour arrivent immédiatement
+  if (event.request.mode === 'navigate' || url.pathname.endsWith('index.html') || url.pathname.endsWith('/')) {
     event.respondWith(networkFirst(event.request));
     return;
   }
