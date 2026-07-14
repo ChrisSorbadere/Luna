@@ -1208,6 +1208,17 @@ function skyProject(alt,az,R){
   return{x:Math.sin(az*DEG)*r,y:-Math.cos(az*DEG)*r};
 }
 
+// Dessine un texte qui reste horizontal même quand la carte tourne
+function drawLabel(text, x, y, dx=0, align='left'){
+  skyCtx.save();
+  skyCtx.translate(x, y);
+  if(skyRotation) skyCtx.rotate(-skyRotation*DEG);
+  skyCtx.textAlign=align;
+  skyCtx.textBaseline='middle';
+  skyCtx.fillText(text, dx, 0);
+  skyCtx.restore();
+}
+
 function drawSky(){
   if(!skyCanvas||!skyCtx)return;
   const W=skyCanvas.width,H=skyCanvas.height,R=Math.min(W,H)*0.46;
@@ -1230,8 +1241,7 @@ function drawSky(){
     const r=R*(90-a)/90;
     skyCtx.beginPath();skyCtx.arc(0,0,r,0,Math.PI*2);skyCtx.stroke();
     skyCtx.fillStyle='rgba(150,140,110,0.4)';skyCtx.font=`${Math.round(13/Math.sqrt(skyZoom))}px Fira Sans`;
-    skyCtx.textAlign='left';skyCtx.textBaseline='middle';
-    skyCtx.fillText(a+'°',4,-(r)+4);
+    drawLabel(a+'°',4,-(r)+4);
   });
   // Rayons azimutaux
   [0,30,60,90,120,150,180,210,240,270,300,330].forEach(az=>{
@@ -1289,14 +1299,12 @@ function drawSky(){
       skyCtx.fillStyle=`rgba(200,180,120,${br*0.85})`;
       const fs=Math.round(14/Math.sqrt(skyZoom));
       skyCtx.font=`${fs}px Fira Sans`;
-      skyCtx.textAlign='left';skyCtx.textBaseline='middle';
-      skyCtx.fillText(name,p.x+r+3/skyZoom,p.y);
+      drawLabel(name,p.x,p.y,r+3/skyZoom);
     } else if((mag<1.5&&skyZoom>1.5)||(mag<2.5&&skyZoom>3)){
       skyCtx.fillStyle=`rgba(180,165,110,${br*0.7})`;
       const fs=Math.round(13/Math.sqrt(skyZoom));
       skyCtx.font=`${fs}px Fira Sans`;
-      skyCtx.textAlign='left';skyCtx.textBaseline='middle';
-      skyCtx.fillText(name,p.x+r+2/skyZoom,p.y);
+      drawLabel(name,p.x,p.y,r+2/skyZoom);
     }
   });
 
@@ -1323,7 +1331,7 @@ function drawSky(){
     mg2.addColorStop(0,'rgba(240,235,200,0.9)');mg2.addColorStop(1,'rgba(0,0,0,0)');
     skyCtx.beginPath();skyCtx.arc(mp.x,mp.y,mr,0,Math.PI*2);skyCtx.fillStyle='rgba(240,235,200,0.9)';skyCtx.fill();
     skyCtx.beginPath();skyCtx.arc(mp.x,mp.y,mr*2.5,0,Math.PI*2);skyCtx.fillStyle=mg2;skyCtx.fill();
-    if(skyZoom>0.6){skyCtx.fillStyle='rgba(240,235,150,0.9)';skyCtx.font=`${Math.round(14/Math.sqrt(skyZoom))}px Fira Sans`;skyCtx.textAlign='left';skyCtx.textBaseline='middle';skyCtx.fillText(moonH.phaseEmoji+' Lune',mp.x+mr+3/skyZoom,mp.y);}
+    if(skyZoom>0.6){skyCtx.fillStyle='rgba(240,235,150,0.9)';skyCtx.font=`${Math.round(14/Math.sqrt(skyZoom))}px Fira Sans`;drawLabel(moonH.phaseEmoji+' Lune',mp.x,mp.y,mr+3/skyZoom);}
   }
 
   // Soleil (si visible)
@@ -1337,7 +1345,7 @@ function drawSky(){
     const sg=skyCtx.createRadialGradient(sp2.x,sp2.y,0,sp2.x,sp2.y,20/skyZoom);
     sg.addColorStop(0,'rgba(255,200,50,0.3)');sg.addColorStop(1,'rgba(0,0,0,0)');
     skyCtx.beginPath();skyCtx.arc(sp2.x,sp2.y,20/skyZoom,0,Math.PI*2);skyCtx.fillStyle=sg;skyCtx.fill();
-    if(skyZoom>0.6){skyCtx.fillStyle='rgba(255,220,80,0.9)';skyCtx.font=`${Math.round(14/Math.sqrt(skyZoom))}px Fira Sans`;skyCtx.textAlign='left';skyCtx.textBaseline='middle';skyCtx.fillText('☀️ Soleil',sp2.x+10/skyZoom,sp2.y);}
+    if(skyZoom>0.6){skyCtx.fillStyle='rgba(255,220,80,0.9)';skyCtx.font=`${Math.round(14/Math.sqrt(skyZoom))}px Fira Sans`;drawLabel('☀️ Soleil',sp2.x,sp2.y,10/skyZoom);}
   }
 
   // Points cardinaux
@@ -1346,7 +1354,7 @@ function drawSky(){
     const x=Math.sin(d.az*DEG)*R*1.05,y=-Math.cos(d.az*DEG)*R*1.05;
     const fs=Math.round(18/Math.sqrt(skyZoom));
     skyCtx.fillStyle='rgba(200,180,120,0.9)';skyCtx.font=`bold ${fs}px Fira Sans`;
-    skyCtx.textAlign='center';skyCtx.textBaseline='middle';skyCtx.fillText(d.l,x,y);
+    drawLabel(d.l,x,y,0,'center');
   });
 
   // Horizon
