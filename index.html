@@ -1777,32 +1777,74 @@ async function checkAndNotify() {
   if(Notification.permission !== 'granted') return;
   const alerts = computeUpcomingAlerts();
   await storeAlertsInIDB(alerts);
-  // Notifier pour événements dans <= 3 jours non encore notifiés
-  const notified = JSON.parse(localStorage.getItem('luna_notified')||'{}');
   const now = Date.now();
+
+  // ── MÉTHODE 1 (prioritaire) : Notification Triggers ──────────────
+  // Programme les notifications à l'avance ; Android les déclenche
+  // tout seul à l'heure prévue, même app fermée. Idéal sur Realme.
+  const triggersSupported = 'showTrigger' in Notification.prototype
+    && typeof TimestampTrigger !== 'undefined';
+
+  if(triggersSupported && 'serviceWorker' in navigator){
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      // Annuler les anciennes notifications programmées Luna (éviter doublons)
+      const existing = await reg.getNotifications({includeTriggered:true});
+      existing.forEach(n => { if(n.tag && n.tag.startsWith('luna_')) n.close(); });
+      // Programmer chaque événement 3 jours avant (à 20h00 locale)
+      for(const a of alerts){
+        // Instant de déclenchement : 3 jours avant l'événement, à 20h
+        const evDate = new Date(a.ts);
+        let trigger = new Date(evDate.getTime() - 3*86400000);
+        trigger.setHours(20,0,0,0);
+        // Si le moment de déclenchement est déjà passé mais l'événement
+        // est proche (≤3j), déclencher dans 1 minute
+        if(trigger.getTime() < now){
+          if(a.diff <= 3) trigger = new Date(now + 60000);
+          else continue; // trop tôt, sera reprogrammé à la prochaine ouverture
+        }
+        try {
+          await reg.showNotification(a.title, {
+            tag: 'luna_'+a.id,
+            body: a.body,
+            icon: './icon-192.png',
+            badge: './icon-192.png',
+            showTrigger: new TimestampTrigger(trigger.getTime()),
+            data: { url: './' }
+          });
+        } catch(e) { /* une notif échoue, on continue les autres */ }
+      }
+      // Enregistrer aussi le periodicSync en complément (si dispo)
+      if('periodicSync' in reg){
+        try { await reg.periodicSync.register('luna-daily-check',{minInterval:12*3600*1000}); }
+        catch(e){}
+      }
+      return; // triggers programmés, terminé
+    } catch(e) { console.warn('Triggers:', e); /* fallback ci-dessous */ }
+  }
+
+  // ── MÉTHODE 2 (secours) : notification immédiate à l'ouverture ────
+  // Utilisée si Notification Triggers non supporté sur l'appareil.
+  const notified = JSON.parse(localStorage.getItem('luna_notified')||'{}');
   alerts.filter(a => a.diff <= 3).forEach(a => {
     const lastNotif = notified[a.id] || 0;
-    // Ne notifier qu'une fois par jour par événement
     if(now - lastNotif > 86400000) {
       try {
         new Notification(a.title, {
-          body: a.body,
-          icon: './icon-192.png',
-          badge: './icon-192.png',
-          tag: a.id,
-          silent: false
+          body: a.body, icon: './icon-192.png', badge: './icon-192.png',
+          tag: a.id, silent: false
         });
         notified[a.id] = now;
       } catch(e) { console.warn('Notif:', e); }
     }
   });
   localStorage.setItem('luna_notified', JSON.stringify(notified));
-  // Periodic Background Sync
+  // periodicSync en complément
   if('serviceWorker' in navigator && 'periodicSync' in ServiceWorkerRegistration.prototype) {
     try {
       const reg = await navigator.serviceWorker.ready;
       await reg.periodicSync.register('luna-daily-check', { minInterval: 12*3600*1000 });
-    } catch(e) { /* periodicSync non dispo, pas grave */ }
+    } catch(e) {}
   }
 }
 
@@ -1819,6 +1861,13 @@ async function initNotifications() {
   }
 }
 
+
+function notifMethodText(){
+  if(!('Notification' in window)) return 'Notifications non supportées par ce navigateur.';
+  if('showTrigger' in Notification.prototype)
+    return '✓ Notifications programmées : Android les déclenche seul, même app fermée.';
+  return 'Notifications affichées à l\'ouverture de l\'app (programmation non supportée ici).';
+}
 
 function renderNotifSettings() {
   const perm = ('Notification' in window) ? Notification.permission : 'unsupported';
@@ -1853,7 +1902,7 @@ function renderNotifSettings() {
         </div>
       </div>`).join('') : `<div class="event-item" style="color:#6a6a8a;font-family:'Fira Sans',sans-serif;font-size:0.85rem;">Aucun événement dans les 7 prochains jours.</div>`}
     </div>
-    <p class="notice">Notifications vérifiées à l${"'"}ouverture de l${"'"}app et toutes les 12h en arrière-plan (Chrome Android).<br>Événements notifiés 3 jours à l${"'"}avance.</p>
+    <p class="notice">${notifMethodText()}<br>Événements notifiés 3 jours à l'avance. Ouvre Luna ~1×/semaine pour reprogrammer.</p>
   </div>`;
 }
 
