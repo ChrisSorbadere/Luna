@@ -1,5 +1,5 @@
 // Luna Pro — Service Worker v4 (avec periodicSync notifications)
-const CACHE_NAME = 'luna-pro-v6';
+const CACHE_NAME = 'luna-pro-v7';
 
 const PRECACHE_ASSETS = [
   './index.html',

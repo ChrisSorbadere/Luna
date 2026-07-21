@@ -18,10 +18,12 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 ::-webkit-scrollbar { width: 0; }
 html { font-size: 18px; }
+html { overscroll-behavior-y: contain; }
 body {
   min-height: 100vh; font-family: 'Cormorant Garamond', serif; color: #d0c8b0;
   max-width: 430px; margin: 0 auto;
   background: linear-gradient(180deg, #08081a 0%, #0d1025 40%, #121430 100%);
+  overscroll-behavior-y: contain;
 }
 .sans { font-family: 'Fira Sans', sans-serif; }
 .content { padding: 16px 16px 120px; }
@@ -1686,7 +1688,11 @@ const IDB_NAME = 'luna-alerts', IDB_VER = 1, IDB_STORE = 'events';
 function openIDB() {
   return new Promise((res, rej) => {
     const req = indexedDB.open(IDB_NAME, IDB_VER);
-    req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE, {keyPath:'id'});
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains('events')) db.createObjectStore('events', {keyPath:'id'});
+      if(!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', {keyPath:'key'});
+    };
     req.onsuccess = e => res(e.target.result);
     req.onerror = e => rej(e.target.error);
   });
