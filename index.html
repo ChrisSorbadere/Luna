@@ -137,12 +137,16 @@ nav.bottom-nav {
   position:fixed; bottom:0; left:50%; transform:translateX(-50%);
   width:100%; max-width:430px;
   background:rgba(8,8,26,0.97); backdrop-filter:blur(20px);
-  padding:8px 2px 26px;
-  display:flex; justify-content:space-around; z-index:10;
+  padding:8px 4px 26px;
+  display:flex; justify-content:flex-start; z-index:10;
   border-top:1px solid rgba(255,255,255,0.05);
+  overflow-x:auto; overflow-y:hidden;
+  scroll-snap-type:x proximity;
+  -webkit-overflow-scrolling:touch;
 }
+nav.bottom-nav::-webkit-scrollbar { display:none; }
 button { background:none; border:none; color:inherit; cursor:pointer; }
-.nav-btn { text-align:center; transition:opacity 0.2s; padding:2px 4px; min-width:46px; }
+.nav-btn { text-align:center; transition:opacity 0.2s; padding:2px 4px; min-width:52px; flex:0 0 auto; scroll-snap-align:center; }
 .nav-icon { font-size:1.1rem; }
 .nav-label { font-size:0.58rem; font-family:'Fira Sans',sans-serif; margin-top:2px; }
 
@@ -1612,11 +1616,17 @@ const MAX_TAB=TABS.length-1;
 let swipeDir=0;
 
 function renderNav(){
-  document.getElementById('bottom-nav').innerHTML=TABS.map(tab=>`
-    <button class="nav-btn" onclick="goToTab(${tab.t})" style="opacity:${state.tab===tab.t?1:0.32};">
+  const nav=document.getElementById('bottom-nav');
+  nav.innerHTML=TABS.map(tab=>`
+    <button class="nav-btn" id="navbtn-${tab.t}" onclick="goToTab(${tab.t})" style="opacity:${state.tab===tab.t?1:0.32};">
       <div class="nav-icon">${tab.i}</div>
       <div class="nav-label">${tab.l}</div>
     </button>`).join('');
+  // Faire défiler la barre pour rendre l'onglet actif visible
+  const activeBtn=document.getElementById('navbtn-'+state.tab);
+  if(activeBtn&&activeBtn.scrollIntoView){
+    try{activeBtn.scrollIntoView({inline:'center',block:'nearest',behavior:'smooth'});}catch(e){}
+  }
 }
 
 function goToTab(t,dir){
