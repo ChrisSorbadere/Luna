@@ -1670,21 +1670,7 @@ function render(){
 }
 
 // Swipe tactile
-let tx=0,ty=0,swipeOnCanvas=false;
-document.addEventListener('touchstart',e=>{
-  tx=e.touches[0].clientX;ty=e.touches[0].clientY;
-  // Ne pas swiper si le touch démarre sur le canvas de la carte du ciel
-  swipeOnCanvas=!!(e.target&&(e.target.id==='skyCanvas'||e.target.id==='fsSkyCanvas'));
-},{passive:true});
-document.addEventListener('touchend',e=>{
-  if(swipeOnCanvas)return; // touch sur la carte → ignorer le swipe
-  if(window._skyFsActive)return; // plein écran carte actif → ignorer le swipe
-  const dx=e.changedTouches[0].clientX-tx,dy=e.changedTouches[0].clientY-ty;
-  if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.5){
-    if(dx<0&&state.tab<MAX_TAB)goToTab(state.tab+1,-1);
-    if(dx>0&&state.tab>0)goToTab(state.tab-1,1);
-  }
-},{passive:true});
+// Navigation par swipe désactivée — utiliser les onglets du bas
 
 function resetToToday(){state.selectedDate=new Date();state.calOffset=0;render();}
 function selectDate(y,m,d){state.selectedDate=new Date(y,m,d);state.tab=0;render();}
