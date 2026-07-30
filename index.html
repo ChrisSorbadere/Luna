@@ -17,14 +17,27 @@
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 ::-webkit-scrollbar { width: 0; }
-html { font-size: 18px; }
-html { overscroll-behavior-y: contain; }
+html { font-size: 18px; overscroll-behavior-y: contain; }
 body {
   min-height: 100vh; font-family: 'Cormorant Garamond', serif; color: #d0c8b0;
   max-width: 430px; margin: 0 auto;
-  background: linear-gradient(180deg, #08081a 0%, #0d1025 40%, #121430 100%);
+  background: var(--sky-bg, linear-gradient(180deg, #08081a 0%, #0d1025 40%, #121430 100%));
   overscroll-behavior-y: contain;
+  transition: filter 0.4s ease;
 }
+/* Mode nuit rouge — préserve la vision nocturne en observation */
+body.red-mode {
+  filter: sepia(75%) hue-rotate(-58deg) saturate(420%) brightness(0.85) contrast(1.05);
+}
+/* Feedback tactile sur les éléments cliquables */
+.stat-card, .section, .event-item, .planet-row, .cal-cell, .mission-card, .launch-item {
+  transition: transform 0.13s ease, background 0.2s ease;
+}
+.stat-card:active, .event-item:active, .planet-row:active, .mission-card:active, .launch-item:active {
+  transform: scale(0.98);
+  background: rgba(255,255,255,0.055);
+}
+.cal-cell:active { transform: scale(0.92); }
 .sans { font-family: 'Fira Sans', sans-serif; }
 .content { padding: 16px 16px 120px; }
 
@@ -181,6 +194,54 @@ button { background:none; border:none; color:inherit; cursor:pointer; }
 // ÉTAT GLOBAL
 // ═══════════════════════════════════════════════════════════════════
 const DEG=Math.PI/180, RAD=180/Math.PI;
+
+// ── Utilitaires sécurité & performance ──────────────────────────────
+function esc(s){
+  if(s==null)return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function parseEventDate(str){ return new Date(str+'T12:00:00'); } // évite le décalage UTC
+const _cacheAstro=new Map();
+function cacheKey(date,type){ return date.getFullYear()+'-'+date.getMonth()+'-'+date.getDate()+'-'+type; }
+function getCached(date,type,fn){
+  const k=cacheKey(date,type);
+  if(_cacheAstro.has(k))return _cacheAstro.get(k);
+  const v=fn(); _cacheAstro.set(k,v); return v;
+}
+
+// ── Fond dynamique selon l'heure locale ─────────────────────────────
+function updateSkyBackground(){
+  const h=new Date().getHours()+new Date().getMinutes()/60;
+  let bg;
+  if(h>=22||h<5){ // nuit profonde
+    bg='linear-gradient(180deg, #050510 0%, #08081a 40%, #0d0f28 100%)';
+  } else if(h>=5&&h<8){ // aube
+    bg='linear-gradient(180deg, #0a0a20 0%, #14162e 45%, #24203a 100%)';
+  } else if(h>=8&&h<18){ // jour
+    bg='linear-gradient(180deg, #0c0e22 0%, #12152e 40%, #181a38 100%)';
+  } else if(h>=18&&h<20){ // crépuscule nautique (teinte bleue)
+    bg='linear-gradient(180deg, #0a0c24 0%, #101838 45%, #182550 100%)';
+  } else { // soir
+    bg='linear-gradient(180deg, #08081a 0%, #0d1025 40%, #121430 100%)';
+  }
+  document.documentElement.style.setProperty('--sky-bg', bg);
+}
+
+// ── Mode nuit rouge ─────────────────────────────────────────────────
+function toggleRedMode(){
+  const on=!document.body.classList.contains('red-mode');
+  document.body.classList.toggle('red-mode', on);
+  try{ localStorage.setItem('luna_red_mode', on?'1':'0'); }catch(e){}
+  const btn=document.getElementById('red-mode-btn');
+  if(btn){
+    btn.style.background=on?'rgba(220,80,60,0.25)':'rgba(200,184,120,0.15)';
+    btn.style.borderColor=on?'rgba(220,80,60,0.6)':'rgba(200,184,120,0.4)';
+    btn.textContent=on?'🔴 Mode nuit ACTIVÉ':'🔴 Mode nuit rouge';
+  }
+}
+function initRedMode(){
+  try{ if(localStorage.getItem('luna_red_mode')==='1') document.body.classList.add('red-mode'); }catch(e){}
+}
 const state={ tab:0, lat:41.65, lon:-0.88, selectedDate:new Date(), calOffset:0, eventFilter:'all' };
 const wx={ data:null, lat:null, lon:null, ts:0, loading:false };
 const spx={ data:null, ts:0, loading:false };
@@ -1015,16 +1076,16 @@ function renderTidesView(){
 function renderEventsView(){
   const now=new Date(),year=now.getFullYear(),f=state.eventFilter;
   const start=new Date(year,0,1).getTime(),end=new Date(year+1,0,1).getTime();
-  const filtered=ASTRO_EVENTS.filter(e=>{const t=new Date(e.d).getTime();return t>=start&&t<end&&(f==='all'||e.cat===f);}).sort((a,b)=>new Date(a.d)-new Date(b.d));
+  const filtered=ASTRO_EVENTS.filter(e=>{const t=parseEventDate(e.d).getTime();return t>=start&&t<end&&(f==='all'||e.cat===f);}).sort((a,b)=>new Date(a.d)-new Date(b.d));
   const cats=['all','eclipse','meteor','conjonction','solstice','superlune','opposition'];
   const filterBar=`<div class="filter-bar">${cats.map(c=>`<button class="filter-btn ${state.eventFilter===c?'active':''}" onclick="state.eventFilter='${c}';render()">${FILTER_LABELS[c]}</button>`).join('')}</div>`;
   const items=filtered.map(e=>{
-    const dt=new Date(e.d),isPast=dt<now,diff=Math.round((dt-now)/86400000);
+    const dt=parseEventDate(e.d),isPast=dt<now,diff=Math.round((dt-now)/86400000);
     const when=isPast?`Il y a ${Math.abs(diff)}j`:diff===0?'Aujourd\'hui !':diff===1?'Demain':`Dans ${diff}j`;
     const dateStr=dt.toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
     return `<div class="event-item" style="${isPast?'opacity:0.4;':''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-        <div style="flex:1;"><div class="event-title">${e.icon} ${e.title}</div><div class="event-detail">${e.detail}</div></div>
+        <div style="flex:1;"><div class="event-title">${e.icon} ${esc(e.title)}</div><div class="event-detail">${esc(e.detail)}</div></div>
         <div style="text-align:right;min-width:72px;"><div class="event-date">${dateStr}</div><div class="event-when">${when}</div></div>
       </div>
     </div>`;
@@ -1085,14 +1146,14 @@ async function renderSpaceView(){
       const sCol=l.status?.abbrev==='Go'?'#50d080':l.status?.abbrev==='TBD'?'#c8b878':'#9a9aaa';
       const dateStr=dt.toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'});
       return`<div class="launch-item"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-        <div style="flex:1;"><div class="launch-name">${l.name}</div>
-          <div class="launch-detail">${l.launch_service_provider?.name||''} · ${l.pad?.location?.name||''}</div>
-          ${l.mission?.type?`<div class="launch-detail">${l.mission.type}</div>`:''}
+        <div style="flex:1;"><div class="launch-name">${esc(l.name)}</div>
+          <div class="launch-detail">${esc(l.launch_service_provider?.name||'')} · ${esc(l.pad?.location?.name||'')}</div>
+          ${l.mission?.type?`<div class="launch-detail">${esc(l.mission.type)}</div>`:''}
         </div>
         <div style="text-align:right;min-width:65px;">
           <div class="launch-when">${dateStr}</div>
           <div class="sans" style="font-size:0.65rem;color:#6a6a8a;">${when}</div>
-          <div class="sans" style="font-size:0.62rem;color:${sCol};margin-top:2px;">${l.status?.name||'TBD'}</div>
+          <div class="sans" style="font-size:0.62rem;color:${sCol};margin-top:2px;">${esc(l.status?.name||'TBD')}</div>
         </div>
       </div></div>`;
     }).join('')+`<div style="padding:6px 14px;"><p class="notice" style="margin:0;">Source : Launch Library 2 (thespacedevs.com)</p></div>`;
@@ -1501,19 +1562,28 @@ function fsDraw(){
   skyCanvas=savedCanvas; skyCtx=savedCtx;
 }
 
-// Factorisation des interactions tactiles/souris (utilisée par les 2 canvas)
+// Factorisation des interactions tactiles/souris avec nettoyage des anciens listeners
+let _skyHandlers=null, _skyHandlersCanvas=null;
 function attachSkyInteractions(canvas, redraw){
+  // Retirer les anciens listeners pour éviter l'accumulation (fuite mémoire)
+  if(_skyHandlers&&_skyHandlersCanvas){
+    const c=_skyHandlersCanvas,h=_skyHandlers;
+    c.removeEventListener('mousedown',h.md);c.removeEventListener('mousemove',h.mm);
+    c.removeEventListener('mouseup',h.mu);c.removeEventListener('wheel',h.wh);
+    c.removeEventListener('dblclick',h.dc);c.removeEventListener('touchstart',h.ts);
+    c.removeEventListener('touchmove',h.tm);c.removeEventListener('touchend',h.te);
+  }
   let dragging=false,lastX=0,lastY=0,pinchDist=0;
-  canvas.addEventListener('mousedown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;canvas.style.cursor='grabbing';});
-  canvas.addEventListener('mousemove',e=>{if(!dragging)return;skyOffX+=e.clientX-lastX;skyOffY+=e.clientY-lastY;lastX=e.clientX;lastY=e.clientY;redraw();});
-  canvas.addEventListener('mouseup',()=>{dragging=false;canvas.style.cursor='grab';});
-  canvas.addEventListener('wheel',e=>{e.preventDefault();skyZoom=Math.max(0.4,Math.min(10,skyZoom*(1-e.deltaY*0.001)));redraw();},{passive:false});
-  canvas.addEventListener('dblclick',()=>{skyZoom=1;skyOffX=0;skyOffY=0;redraw();});
-  canvas.addEventListener('touchstart',e=>{
+  const md=e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;canvas.style.cursor='grabbing';};
+  const mm=e=>{if(!dragging)return;skyOffX+=e.clientX-lastX;skyOffY+=e.clientY-lastY;lastX=e.clientX;lastY=e.clientY;redraw();};
+  const mu=()=>{dragging=false;canvas.style.cursor='grab';};
+  const wh=e=>{e.preventDefault();skyZoom=Math.max(0.4,Math.min(10,skyZoom*(1-e.deltaY*0.001)));redraw();};
+  const dc=()=>{skyZoom=1;skyOffX=0;skyOffY=0;redraw();};
+  const ts=e=>{
     if(e.touches.length===1){dragging=true;lastX=e.touches[0].clientX;lastY=e.touches[0].clientY;}
     if(e.touches.length===2){pinchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}
-  },{passive:true});
-  canvas.addEventListener('touchmove',e=>{
+  };
+  const tm=e=>{
     if(e.touches.length===2){
       const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
       skyZoom=Math.max(0.4,Math.min(10,skyZoom*d/pinchDist));pinchDist=d;
@@ -1522,8 +1592,18 @@ function attachSkyInteractions(canvas, redraw){
       lastX=e.touches[0].clientX;lastY=e.touches[0].clientY;
     }
     redraw();
-  },{passive:true});
-  canvas.addEventListener('touchend',e=>{if(e.touches.length===0)dragging=false;},{passive:true});
+  };
+  const te=e=>{if(e.touches.length===0)dragging=false;};
+  canvas.addEventListener('mousedown',md);
+  canvas.addEventListener('mousemove',mm);
+  canvas.addEventListener('mouseup',mu);
+  canvas.addEventListener('wheel',wh,{passive:false});
+  canvas.addEventListener('dblclick',dc);
+  canvas.addEventListener('touchstart',ts,{passive:true});
+  canvas.addEventListener('touchmove',tm,{passive:true});
+  canvas.addEventListener('touchend',te,{passive:true});
+  _skyHandlers={md,mm,mu,wh,dc,ts,tm,te};
+  _skyHandlersCanvas=canvas;
 }
 
 function renderSkyView(){
@@ -1578,7 +1658,13 @@ function renderCalendarView(){
   const startPad=(new Date(year,month,1).getDay()+6)%7;
   const monthName=vd.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
   const ms=new Date(year,month,1).getTime(),me=new Date(year,month+1,0).getTime()+86399999;
-  const mev=ASTRO_EVENTS.filter(e=>{const t=new Date(e.d).getTime();return t>=ms&&t<=me;});
+  const mev=ASTRO_EVENTS.filter(e=>{const t=parseEventDate(e.d).getTime();return t>=ms&&t<=me;});
+  // Pré-calcul des pleines lunes du mois (une seule passe) pour éviter O(n²)
+  const monthFulls=[];
+  for(let dd2=1;dd2<=lastDay;dd2++){
+    const p=getCached(new Date(year,month,dd2),'phase',()=>getMoonPhase(new Date(year,month,dd2)));
+    if(p.elongation>168&&p.elongation<191) monthFulls.push({day:dd2,dist:p.distance});
+  }
   let h=`<div class="anim-in">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <button onclick="state.calOffset--;render()" style="font-size:1.4rem;padding:4px 12px;color:#d0c8b0;">‹</button>
@@ -1590,9 +1676,10 @@ function renderCalendarView(){
   for(let d=1;d<=lastDay;d++){
     const sel=state.selectedDate.getDate()===d&&state.selectedDate.getMonth()===month&&state.selectedDate.getFullYear()===year;
     const tod=now.getDate()===d&&now.getMonth()===month&&now.getFullYear()===year;
-    const dd=new Date(year,month,d),ph=getMoonPhase(dd);
-    const hasEv=ASTRO_EVENTS.some(e=>new Date(e.d).toDateString()===dd.toDateString());
-    const sp=getMoonSpecials(dd),isSM=sp.some(s=>s.label==='Super Lune');
+    const dd=new Date(year,month,d),ph=getCached(dd,'phase',()=>getMoonPhase(dd));
+    const hasEv=ASTRO_EVENTS.some(e=>parseEventDate(e.d).toDateString()===dd.toDateString());
+    const fullThisDay=monthFulls.find(f=>f.day===d);
+    const isSM=!!(fullThisDay&&fullThisDay.dist<362000);
     h+=`<div class="cal-cell ${sel?'selected':''} ${tod?'today':''}" onclick="selectDate(${year},${month},${d})">
       <div style="font-size:${isSM?'1.1rem':'0.9rem'};${isSM?'text-shadow:0 0 8px rgba(255,220,100,0.8);':''}text-align:center;">${ph.phaseEmoji}</div>
       <div class="cal-day sans" style="font-size:0.65rem;margin-top:2px;text-align:center;">${d}</div>
@@ -1600,7 +1687,7 @@ function renderCalendarView(){
     </div>`;
   }
   h+=`</div>`;
-  if(mev.length) h+=`<div class="section" style="margin-top:16px;"><div class="section-title">Événements du mois</div>${mev.map(e=>`<div class="row"><span style="font-size:0.95rem;">${e.icon} ${e.title}</span><span class="sans" style="font-size:0.78rem;color:#c8b878;">${new Date(e.d).toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}</span></div>`).join('')}</div>`;
+  if(mev.length) h+=`<div class="section" style="margin-top:16px;"><div class="section-title">Événements du mois</div>${mev.map(e=>`<div class="row"><span style="font-size:0.95rem;">${e.icon} ${esc(e.title)}</span><span class="sans" style="font-size:0.78rem;color:#c8b878;">${parseEventDate(e.d).toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}</span></div>`).join('')}</div>`;
   return h+`</div>`;
 }
 
@@ -1711,7 +1798,7 @@ function computeUpcomingAlerts() {
 
   // 1. Événements astronomiques ASTRO_EVENTS
   ASTRO_EVENTS.forEach(ev => {
-    const d = new Date(ev.d);
+    const d = parseEventDate(ev.d);
     if(d >= now && d <= in7days) {
       const diff = Math.round((d - now) / 86400000);
       const when = diff===0?"Aujourd'hui":diff===1?'Demain':`Dans ${diff} jours`;
@@ -1862,6 +1949,15 @@ function renderNotifSettings() {
   const alerts = computeUpcomingAlerts().slice(0,5);
   return `<div class="anim-in">
     <div class="section">
+      <div class="section-title">🌙 Affichage</div>
+      <div style="padding:10px 14px;">
+        <button id="red-mode-btn" onclick="toggleRedMode()" style="background:${document.body.classList.contains('red-mode')?'rgba(220,80,60,0.25)':'rgba(200,184,120,0.15)'};border:1px solid ${document.body.classList.contains('red-mode')?'rgba(220,80,60,0.6)':'rgba(200,184,120,0.4)'};color:#e8dfc4;font-family:'Fira Sans',sans-serif;font-size:0.85rem;padding:9px 16px;border-radius:20px;cursor:pointer;width:100%;">
+          ${document.body.classList.contains('red-mode')?'🔴 Mode nuit ACTIVÉ':'🔴 Mode nuit rouge'}
+        </button>
+        <p class="notice" style="margin-top:8px;text-align:left;">Filtre rouge qui préserve ta vision nocturne pendant l'observation. Idéal sur le terrain.</p>
+      </div>
+    </div>
+    <div class="section">
       <div class="section-title">🔔 Notifications</div>
       <div class="row">
         <span class="row-label">État</span>
@@ -1893,139 +1989,6 @@ function renderNotifSettings() {
 }
 
 
-async function loadISSData(){
-  const container=document.getElementById('iss-content');
-  if(!container)return;
-  const data=await fetchISS();
-  if(!data){
-    if(container)container.innerHTML='<div class="sans" style="font-size:0.8rem;color:#6a6a8a;padding:4px 0;">Données ISS indisponibles hors connexion.</div>';
-    return;
-  }
-  const {latitude:issLat,longitude:issLon,altitude:issAlt,velocity:issVel,visibility:issVis}=data;
-  const vis=issVisible(issLat,issLon,issAlt,state.lat,state.lon);
-  const isNight=issVis==='eclipsed'?'🌑 Côté nuit':'☀️ Côté jour';
-  const visHTML=vis
-    ?`<div style="background:rgba(80,208,128,0.1);border:1px solid rgba(80,208,128,0.3);border-radius:10px;padding:10px 12px;margin-top:8px;">
-        <div class="sans" style="font-size:0.9rem;color:#50d080;font-weight:500;">✓ ISS VISIBLE MAINTENANT</div>
-        <div class="sans" style="font-size:0.78rem;color:#9a9aaa;margin-top:4px;">Élévation : ${vis.elevation}° · Direction : ${vis.dir} (${vis.az}°)</div>
-      </div>`
-    :`<div style="background:rgba(100,100,120,0.1);border:1px solid rgba(100,100,120,0.2);border-radius:10px;padding:8px 12px;margin-top:8px;">
-        <div class="sans" style="font-size:0.78rem;color:#6a6a8a;">Non visible depuis ta position actuellement</div>
-      </div>`;
-  if(container) container.innerHTML=`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">
-      <div class="stat-card" style="margin:0;padding:10px;">
-        <div class="lbl">Latitude</div><div class="val" style="font-size:1rem;">${issLat.toFixed(2)}°</div>
-      </div>
-      <div class="stat-card" style="margin:0;padding:10px;">
-        <div class="lbl">Longitude</div><div class="val" style="font-size:1rem;">${issLon.toFixed(2)}°</div>
-      </div>
-      <div class="stat-card" style="margin:0;padding:10px;">
-        <div class="lbl">Altitude</div><div class="val" style="font-size:1rem;">${Math.round(issAlt)}</div><div class="sub">km</div>
-      </div>
-      <div class="stat-card" style="margin:0;padding:10px;">
-        <div class="lbl">Vitesse</div><div class="val" style="font-size:1rem;">${Math.round(issVel/3.6)}</div><div class="sub">km/s</div>
-      </div>
-    </div>
-    <div class="row" style="padding:8px 0;border:none;"><span class="row-label">Illumination</span><span class="sans" style="font-size:0.85rem;">${isNight}</span></div>
-    ${visHTML}
-    <div class="sans" style="font-size:0.65rem;color:#5a5a7a;margin-top:6px;text-align:right;">Actualisé : ${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div>
-  `;
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// RENDU : SOLEIL
-// ═══════════════════════════════════════════════════════════════════
-function renderSunView(){
-  const d=state.selectedDate,sun=getSunTimes(d,state.lat,state.lon),ph=getMoonPhase(d);
-  const jd=julianDate(d),T=(jd-2451545)/36525,M=357.52911+35999.05029*T,L0=280.46646+36000.76983*T;
-  const C=(1.914602-0.004817*T)*Math.sin(M*DEG)+0.019993*Math.sin(2*M*DEG);
-  const lon=((L0+C)%360+360)%360,decl=Math.asin(0.39782*Math.sin(lon*DEG))*RAD;
-  return `<div class="anim-in">
-    <div style="text-align:center;margin:8px 0 16px;">
-      <div style="font-size:3rem;">☀️</div>
-      <p class="sans" style="font-size:0.85rem;color:#9a9aaa;margin-top:6px;">Déclinaison ${decl.toFixed(1)}°</p>
-      <p class="sans" style="font-size:0.72rem;color:#6a6a8a;margin-top:2px;">${decl>0?'Hémisphère nord incliné vers le Soleil':'Hémisphère nord incliné loin du Soleil'}</p>
-    </div>
-    ${sunArcSVG(sun.rise,sun.set)}
-    <div class="stat-grid" style="margin-top:14px;">
-      <div class="stat-card"><div class="lbl">Lever</div><div class="val">${sun.rise}</div></div>
-      <div class="stat-card"><div class="lbl">Coucher</div><div class="val">${sun.set}</div></div>
-      <div class="stat-card" style="grid-column:1/-1;"><div class="lbl">Durée du jour</div><div class="val">${sun.duration}</div>
-        ${sun.delta!==null?`<div class="sub" style="color:${sun.delta>=0?'#80c890':'#e08070'};">${sun.delta>=0?'▲':'▼'} ${Math.abs(sun.delta)} min vs hier</div>`:''}
-      </div>
-    </div>
-    <div class="section"><div class="section-title">Crépuscules</div>
-      <div class="row"><span class="row-label">Civil</span><span class="sans" style="font-size:0.85rem;">${sun.set} → ${sun.civilEnd||'--:--'}</span></div>
-      <div class="row"><span class="row-label">Nautique</span><span class="sans" style="font-size:0.85rem;">${sun.civilEnd||'--:--'} → ${sun.nautEnd||'--:--'}</span></div>
-      <div class="row"><span class="row-label">Astronomique</span><span class="sans" style="font-size:0.85rem;color:#c8b878;">${sun.nautEnd||'--:--'} → ${sun.astroEnd||'--:--'}</span></div>
-      ${sun.astroEnd?`<div class="row" style="background:rgba(100,100,200,0.05);"><span class="row-label">🔭 Nuit astro.</span><span class="sans" style="font-size:0.85rem;color:#c8b878;">${sun.astroEnd} → ${sun.astroStart||'--:--'}</span></div>`:''}
-    </div>
-    <div class="section"><div class="row"><span class="row-label">Lune ce soir</span><span>${ph.phaseEmoji} ${ph.phaseName} — ${ph.illumination.toFixed(0)}%</span></div></div>
-  </div>`;
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// RENDU : MARÉES
-// ═══════════════════════════════════════════════════════════════════
-function renderTidesView(){
-  const d=state.selectedDate,c=tidalCoeff(d),color=coeffColor(c),label=coeffLabel(c),pct=(c/120*100).toFixed(0);
-  const days=[];for(let i=-3;i<=3;i++)days.push({offset:i,coeff:tidalCoeff(new Date(d.getTime()+i*86400000)),date:new Date(d.getTime()+i*86400000)});
-  return `<div class="anim-in">
-    <div style="text-align:center;margin:8px 0 20px;">
-      <div style="font-size:4rem;font-weight:300;color:${color};">${c}</div>
-      <p class="sans" style="font-size:0.9rem;color:${color};margin-top:2px;">${label}</p>
-      <div class="coeff-bar-bg" style="max-width:200px;margin:10px auto 0;"><div class="coeff-bar-fill" style="width:${pct}%;background:${color};"></div></div>
-      <p class="sans" style="font-size:0.72rem;color:#6a6a8a;margin-top:4px;">${pct}% du maximum</p>
-    </div>
-    <div class="section">
-      <div class="row"><span class="row-label">Phase lunaire</span><span>${getMoonPhase(d).phaseEmoji} ${getMoonPhase(d).phaseName}</span></div>
-      <div class="row"><span class="row-label">Distance Lune</span><span class="sans" style="font-size:0.85rem;">${Math.round(getMoonPhase(d).distance).toLocaleString('fr-FR')} km</span></div>
-    </div>
-    <div class="section-title" style="padding:14px 0 8px;font-size:0.67rem;color:#7a7a9a;letter-spacing:1.5px;font-family:'Fira Sans',sans-serif;text-transform:uppercase;">Évolution 7 jours</div>
-    <div class="section">
-      ${days.map(({offset,coeff,date})=>{const sel=offset===0,col=coeffColor(coeff);return`<div class="row" style="${sel?'background:rgba(200,180,120,0.05);':''}">
-        <span class="sans" style="font-size:0.82rem;${sel?'color:#e8dfc4;font-weight:500;':'color:#9a9aaa;'}">${date.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})}</span>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div style="width:50px;height:4px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;"><div style="width:${(coeff/120*100).toFixed(0)}%;height:100%;background:${col};border-radius:4px;"></div></div>
-          <span class="sans" style="font-size:1rem;color:${col};font-weight:${sel?'600':'400'};min-width:28px;text-align:right;">${coeff}</span>
-        </div>
-      </div>`;}).join('')}
-    </div>
-    <p class="notice">Coefficient indicatif — non valable pour la navigation côtière.</p>
-  </div>`;
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// RENDU : ÉVÉNEMENTS (année complète + filtres)
-// ═══════════════════════════════════════════════════════════════════
-function renderEventsView(){
-  const now=new Date(),year=now.getFullYear(),f=state.eventFilter;
-  const start=new Date(year,0,1).getTime(),end=new Date(year+1,0,1).getTime();
-  const filtered=ASTRO_EVENTS.filter(e=>{const t=new Date(e.d).getTime();return t>=start&&t<end&&(f==='all'||e.cat===f);}).sort((a,b)=>new Date(a.d)-new Date(b.d));
-  const cats=['all','eclipse','meteor','conjonction','solstice','superlune','opposition'];
-  const filterBar=`<div class="filter-bar">${cats.map(c=>`<button class="filter-btn ${state.eventFilter===c?'active':''}" onclick="state.eventFilter='${c}';render()">${FILTER_LABELS[c]}</button>`).join('')}</div>`;
-  const items=filtered.map(e=>{
-    const dt=new Date(e.d),isPast=dt<now,diff=Math.round((dt-now)/86400000);
-    const when=isPast?`Il y a ${Math.abs(diff)}j`:diff===0?'Aujourd\'hui !':diff===1?'Demain':`Dans ${diff}j`;
-    const dateStr=dt.toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
-    return `<div class="event-item" style="${isPast?'opacity:0.4;':''}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-        <div style="flex:1;"><div class="event-title">${e.icon} ${e.title}</div><div class="event-detail">${e.detail}</div></div>
-        <div style="text-align:right;min-width:72px;"><div class="event-date">${dateStr}</div><div class="event-when">${when}</div></div>
-      </div>
-    </div>`;
-  }).join('');
-  return `<div class="anim-in">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-      <h2 style="font-size:1.1rem;font-weight:400;">Événements ${year}</h2>
-      <span class="sans" style="font-size:0.72rem;color:#7a7a9a;">${filtered.length} événement${filtered.length>1?'s':''}</span>
-    </div>
-    <div class="section">${filterBar}${items||'<div class="event-item" style="color:#6a6a8a;font-family:\'Fira Sans\',sans-serif;font-size:0.85rem;">Aucun événement dans cette catégorie.</div>'}</div>
-  </div>`;
-}
-
-
 
 // ═══════════════════════════════════════════════════════════════════
 // INIT & GÉOLOCALISATION
@@ -2044,6 +2007,9 @@ if(navigator.geolocation){
 } else {
   document.getElementById('location-text').textContent='Zaragoza (défaut)';
 }
+initRedMode();
+updateSkyBackground();
+setInterval(updateSkyBackground, 600000); // maj fond toutes les 10 min
 render();
 initNotifications();
 
