@@ -1075,15 +1075,17 @@ function renderTidesView(){
 // ═══════════════════════════════════════════════════════════════════
 function renderEventsView(){
   const now=new Date(),year=now.getFullYear(),f=state.eventFilter;
-  const start=new Date(year,0,1).getTime(),end=new Date(year+1,0,1).getTime();
-  const filtered=ASTRO_EVENTS.filter(e=>{const t=parseEventDate(e.d).getTime();return t>=start&&t<end&&(f==='all'||e.cat===f);}).sort((a,b)=>new Date(a.d)-new Date(b.d));
+  // Ne montrer que les événements à venir (à partir d'aujourd'hui), sur 12 mois glissants
+  const startOfToday=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
+  const end=startOfToday+366*86400000;
+  const filtered=ASTRO_EVENTS.filter(e=>{const t=parseEventDate(e.d).getTime();return t>=startOfToday&&t<end&&(f==='all'||e.cat===f);}).sort((a,b)=>parseEventDate(a.d)-parseEventDate(b.d));
   const cats=['all','eclipse','meteor','conjonction','solstice','superlune','opposition'];
   const filterBar=`<div class="filter-bar">${cats.map(c=>`<button class="filter-btn ${state.eventFilter===c?'active':''}" onclick="state.eventFilter='${c}';render()">${FILTER_LABELS[c]}</button>`).join('')}</div>`;
   const items=filtered.map(e=>{
-    const dt=parseEventDate(e.d),isPast=dt<now,diff=Math.round((dt-now)/86400000);
-    const when=isPast?`Il y a ${Math.abs(diff)}j`:diff===0?'Aujourd\'hui !':diff===1?'Demain':`Dans ${diff}j`;
-    const dateStr=dt.toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
-    return `<div class="event-item" style="${isPast?'opacity:0.4;':''}">
+    const dt=parseEventDate(e.d),diff=Math.round((dt-now)/86400000);
+    const when=diff<=0?"Aujourd'hui !":diff===1?'Demain':`Dans ${diff}j`;
+    const dateStr=dt.toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:dt.getFullYear()!==year?'numeric':undefined});
+    return `<div class="event-item">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
         <div style="flex:1;"><div class="event-title">${e.icon} ${esc(e.title)}</div><div class="event-detail">${esc(e.detail)}</div></div>
         <div style="text-align:right;min-width:72px;"><div class="event-date">${dateStr}</div><div class="event-when">${when}</div></div>
@@ -1092,7 +1094,7 @@ function renderEventsView(){
   }).join('');
   return `<div class="anim-in">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-      <h2 style="font-size:1.1rem;font-weight:400;">Événements ${year}</h2>
+      <h2 style="font-size:1.1rem;font-weight:400;">Événements à venir</h2>
       <span class="sans" style="font-size:0.72rem;color:#7a7a9a;">${filtered.length} événement${filtered.length>1?'s':''}</span>
     </div>
     <div class="section">${filterBar}${items||'<div class="event-item" style="color:#6a6a8a;font-family:\'Fira Sans\',sans-serif;font-size:0.85rem;">Aucun événement dans cette catégorie.</div>'}</div>
@@ -1845,10 +1847,42 @@ function computeUpcomingAlerts() {
         // Super lune ?
         const ph = getMoonPhase(d);
         const isSuper = p.t===0.5 && ph.distance < 362000;
+        // Lune bleue : 2e pleine lune dans le même mois civil
+        let isBlue = false;
+        if(p.t===0.5){
+          const m = d.getMonth(), y = d.getFullYear();
+          // Chercher une autre pleine lune le même mois
+          for(let kk=k0-1; kk<=k0+2; kk++){
+            const other = moonPhaseExact(kk, 0.5);
+            if(other.getTime()!==d.getTime() && other.getMonth()===m && other.getFullYear()===y && other < d){
+              isBlue = true; break;
+            }
+          }
+        }
+        const prefix = isSuper?'Super ':(isBlue?'🔵 ':'');
         alerts.push({
           id: 'phase_'+dk+'_'+p.t,
-          title: '🌙 Luna — ' + (isSuper?'Super ':'') + p.label,
-          body: when + (isSuper?' · Distance : '+Math.round(ph.distance).toLocaleString('fr-FR')+' km':''),
+          title: '🌙 Luna — ' + prefix + p.label + (isBlue?' (Lune Bleue)':''),
+          body: when + (isSuper?' · Distance : '+Math.round(ph.distance).toLocaleString('fr-FR')+' km':(isBlue?' · Deuxième pleine lune du mois':'')),
+          ts: d.getTime(),
+          diff
+        });
+      }
+    });
+  }
+
+  // 3. Lancements spatiaux notables (données API déjà chargées)
+  if(spx.data && spx.data.results){
+    spx.data.results.forEach(l => {
+      const d = new Date(l.net);
+      if(d >= now && d <= in7days){
+        const diff = Math.round((d - now) / 86400000);
+        const when = diff===0?"Aujourd'hui":diff===1?'Demain':`Dans ${diff} jours`;
+        const provider = l.launch_service_provider?.name || '';
+        alerts.push({
+          id: 'launch_'+(l.id||l.name),
+          title: '🚀 Luna — Lancement : ' + (l.name||'Mission spatiale'),
+          body: when + (provider?' · '+provider:''),
           ts: d.getTime(),
           diff
         });
@@ -1888,6 +1922,8 @@ async function testNotification() {
 
 async function checkAndNotify() {
   if(Notification.permission !== 'granted') return;
+  // S'assurer que les lancements sont chargés pour les inclure dans les alertes
+  if(!spx.data){ try{ await fetchLaunches(); }catch(e){} }
   const alerts = computeUpcomingAlerts();
   await storeAlertsInIDB(alerts);
   const now = Date.now();
