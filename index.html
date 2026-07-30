@@ -1846,6 +1846,31 @@ function computeUpcomingAlerts() {
   return alerts;
 }
 
+async function testNotification() {
+  if(!('Notification' in window)){ alert('Notifications non supportées.'); return; }
+  let perm = Notification.permission;
+  if(perm === 'default') perm = await Notification.requestPermission();
+  if(perm !== 'granted'){ alert('Permission refusée. Active les notifications dans les réglages Android.'); return; }
+  const title = '🌙 Luna — Test réussi';
+  const opts = {
+    body: 'Les notifications fonctionnent sur ton téléphone ✓',
+    icon: './icon-192.png', badge: './icon-192.png', tag: 'luna_test',
+    requireInteraction: false
+  };
+  // Essayer via le service worker (recommandé sur Android), sinon direct
+  try {
+    if('serviceWorker' in navigator){
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(title, opts);
+    } else {
+      new Notification(title, opts);
+    }
+  } catch(e){
+    try { new Notification(title, opts); }
+    catch(e2){ alert('Échec : '+e2.message); }
+  }
+}
+
 async function checkAndNotify() {
   if(Notification.permission !== 'granted') return;
   const alerts = computeUpcomingAlerts();
@@ -1970,6 +1995,12 @@ function renderNotifSettings() {
         </button>
       </div>`:''}
       ${perm==='denied'?`<div style="padding:10px 14px;"><p class="notice" style="margin:0;">Pour activer : Chrome → 3 points → Paramètres → Confidentialité → Paramètres des sites → Notifications → ChrisSorbadere.github.io</p></div>`:''}
+      <div style="padding:6px 14px 12px;">
+        <button onclick="testNotification()" style="background:rgba(100,150,255,0.15);border:1px solid rgba(100,150,255,0.4);color:#c8d8ff;font-family:'Fira Sans',sans-serif;font-size:0.82rem;padding:9px 16px;border-radius:20px;cursor:pointer;width:100%;">
+          🔔 Envoyer une notification de test
+        </button>
+        <p class="notice" style="margin-top:6px;text-align:left;">Vérifie en 2 secondes si les notifications marchent sur ton téléphone.</p>
+      </div>
     </div>
     <div class="section">
       <div class="section-title">📅 Prochaines alertes (7 jours)</div>
