@@ -134,6 +134,9 @@ header h1 { font-size: 2rem; font-weight: 300; letter-spacing: 6px; color: #e8df
 .mission-name { font-size:0.95rem; line-height:1.3; }
 .mission-agency { font-size:0.72rem; color:#c8b878; font-family:'Fira Sans',sans-serif; margin-top:3px; }
 .mission-desc { font-size:0.75rem; color:#8a8aaa; font-family:'Fira Sans',sans-serif; margin-top:4px; line-height:1.5; }
+.mission-date { font-size:0.7rem; color:#8a8aaa; font-family:'Fira Sans',sans-serif; margin-top:2px; }
+.mission-obj { font-size:0.78rem; color:#9a9ac0; font-family:'Fira Sans',sans-serif; margin-top:9px; line-height:1.6; padding:9px 11px; background:rgba(255,255,255,0.035); border-left:2px solid #c8b878; border-radius:0 6px 6px 0; }
+.mission-obj-t { display:block; font-size:0.62rem; letter-spacing:0.08em; text-transform:uppercase; color:#c8b878; margin-bottom:4px; }
 .mission-badge { display:inline-block; font-size:0.62rem; font-family:'Fira Sans',sans-serif; padding:3px 8px; border-radius:8px; margin-top:6px; font-weight:500; }
 .badge-active   { background:rgba(80,208,128,0.15);  color:#50d080; border:1px solid rgba(80,208,128,0.3); }
 .badge-upcoming { background:rgba(200,184,120,0.15); color:#c8b878; border:1px solid rgba(200,184,120,0.3); }
@@ -363,24 +366,36 @@ const MOON_NAMES=['Lune du Loup','Lune de Neige','Lune du Ver','Lune Rose','Lune
 // MISSIONS SPATIALES
 // ═══════════════════════════════════════════════════════════════════
 const MISSIONS=[
-  {zone:'moon',badge:'badge-active',status:'Accomplie',icon:'🌕',name:'Chang\'e 6 — Retour d\'échantillons',agency:'CNSA · Chine',date:'Réussie : Juin 2024',desc:'Première mission ayant rapporté des échantillons de la face cachée de la Lune. 1,9 kg ramenés du cratère Pôle Sud-Aitken.'},
-  {zone:'moon',badge:'badge-active',status:'En cours',icon:'🛸',name:'LRO — Lunar Reconnaissance Orbiter',agency:'NASA',date:'En orbite depuis 2009',desc:'Cartographie la surface lunaire avec précision métrique. Données essentielles pour le programme Artemis.'},
-  {zone:'moon',badge:'badge-upcoming',status:'À venir',icon:'🚀',name:'Artemis III — Premier alunissage habité',agency:'NASA',date:'Prévu : 2027',desc:'Premier équipage humain sur la Lune depuis Apollo 17 (1972). Inclura la première femme sur la Lune. Utilise le HLS Starship de SpaceX.'},
-  {zone:'moon',badge:'badge-active',status:'En cours',icon:'🌕',name:'Chang\'e 7 — Pôle Sud lunaire',agency:'CNSA · Chine',date:'Lancée : 2026',desc:'Mission complexe : orbiteur, atterrisseur, rover et mini-sonde volante pour explorer les cratères ombragés du pôle Sud. Recherche de glace d\'eau.'},
-  {zone:'moon',badge:'badge-upcoming',status:'À venir',icon:'🛬',name:'Luna 27 — Pôle Sud lunaire',agency:'Roscosmos · Russie',date:'Prévu : 2027–2028',desc:'Atterrisseur ciblant le pôle Sud pour analyser le sol et chercher de l\'eau. Après l\'échec de Luna 25 en 2023.'},
-  {zone:'moon',badge:'badge-planned',status:'Planifié',icon:'🛸',name:'Gateway — Station orbitale lunaire',agency:'NASA / ESA / JAXA / CSA',date:'Premier lancement : 2027+',desc:'Station spatiale en orbite lunaire elliptique. Servira de base avancée pour les missions Artemis vers la surface.'},
-  {zone:'mars',badge:'badge-active',status:'En cours',icon:'🤖',name:'Perseverance — Astrobiology Rover',agency:'NASA',date:'En opération depuis Fév 2021',desc:'Dans le cratère Jezero. 23 tubes d\'échantillons collectés. Découverte de matière organique complexe.'},
-  {zone:'mars',badge:'badge-active',status:'En cours',icon:'🤖',name:'Curiosity — MSL Rover',agency:'NASA',date:'En opération depuis 2012',desc:'Plus de 30 km parcourus dans le cratère Gale. Analyse géochimique et détection de méthane saisonnier.'},
-  {zone:'mars',badge:'badge-active',status:'En cours',icon:'🛸',name:'Mars Odyssey & MRO',agency:'NASA',date:'En orbite',desc:'Cartographie thermique et haute résolution de la surface. Relais de communication pour les rovers.'},
-  {zone:'mars',badge:'badge-active',status:'En cours',icon:'🛸',name:'Tianwen-1 — Orbiteur',agency:'CNSA · Chine',date:'En orbite depuis 2021',desc:'Orbiteur actif. Le rover Zhurong est en hibernation depuis mai 2022 suite à des dépôts de poussière solaire.'},
-  {zone:'mars',badge:'badge-upcoming',status:'À venir',icon:'🚀',name:'Mars Sample Return (MSR)',agency:'NASA / ESA',date:'Lancement : 2030–2033',desc:'Retour des échantillons collectés par Perseverance. Atterrisseur, fusée martienne, orbiteur. Arrivée Terre vers 2033.'},
-  {zone:'mars',badge:'badge-upcoming',status:'À venir',icon:'🤖',name:'Rosalind Franklin — ExoMars Rover',agency:'ESA',date:'2028 au plus tôt',desc:'Rover européen avec foreuse de 2 m pour chercher des traces de vie enfouies. Partenariat Roscosmos rompu en 2022.'},
-  {zone:'mars',badge:'badge-planned',status:'Planifié',icon:'🚀',name:'Starship — Mission cargo Mars',agency:'SpaceX',date:'Première fenêtre : 2026',desc:'Envoi de Starships cargo pour préparer une présence humaine. Mission habitée envisagée vers 2029–2031.'},
-  {zone:'iss',badge:'badge-active',status:'En cours',icon:'🛸',name:'ISS — Station spatiale internationale',agency:'NASA / ESA / Roscosmos / JAXA / CSA',date:'Opérationnelle jusqu\'en 2030',desc:'En orbite à ~408 km depuis 1998. 7 astronautes en permanence. Déorbitage contrôlé prévu dans le Pacifique Sud.'},
-  {zone:'iss',badge:'badge-active',status:'En cours',icon:'🚀',name:'Crew Dragon — Rotations ISS',agency:'SpaceX / NASA',date:'Rotations régulières',desc:'Rotations d\'équipage vers l\'ISS. Chaque mission dure ~6 mois. Fiabilité prouvée depuis 2020.'},
-  {zone:'iss',badge:'badge-active',status:'En cours',icon:'🚀',name:'Soyouz — Rotations ISS',agency:'Roscosmos',date:'Rotations régulières',desc:'Véhicule de secours permanent de l\'ISS. Assure les rotations des cosmonautes russes et astronautes partenaires.'},
-  {zone:'iss',badge:'badge-active',status:'En cours',icon:'🛸',name:'Tiangong — Station chinoise',agency:'CNSA · Chine',date:'Opérationnelle depuis 2022',desc:'3 taïkonautes en permanence. Programme d\'expansion en cours. Alternative à l\'ISS après 2030.'},
-  {zone:'iss',badge:'badge-upcoming',status:'À venir',icon:'🛸',name:'Axiom Station — Module commercial',agency:'Axiom Space',date:'Prévu : 2026–2027',desc:'Premier module commercial attaché à l\'ISS. Posera les bases d\'une station commerciale indépendante post-2030.'},
+  // ───────────── LUNE ─────────────
+  {zone:'moon',badge:'badge-active',status:'En cours',icon:'🛸',name:'LRO — Lunar Reconnaissance Orbiter',agency:'NASA',nat:'🇺🇸 États-Unis',date:'En orbite depuis 2009',obj:'Cartographier la Lune au mètre près. Ses relevés servent à choisir les sites d\'alunissage du programme Artemis et à repérer la glace d\'eau piégée au fond des cratères polaires, que le Soleil n\'éclaire jamais.'},
+  {zone:'moon',badge:'badge-upcoming',status:'À venir',icon:'🛬',name:'Blue Ghost 2 — Face cachée',agency:'Firefly Aerospace · contrat NASA',nat:'🇺🇸 États-Unis',date:'Prévu : fin 2026',obj:'Premier atterrissage américain sur la face cachée de la Lune. La mission déposera aussi le satellite relais européen Lunar Pathfinder en orbite lunaire : depuis la face cachée, aucune communication directe avec la Terre n\'est possible.'},
+  {zone:'moon',badge:'badge-upcoming',status:'À venir',icon:'🛬',name:'IM-3 « Trinity » — Reiner Gamma',agency:'Intuitive Machines · contrat NASA',nat:'🇺🇸 États-Unis',date:'Prévu : fin 2026',obj:'Se poser sur Reiner Gamma, un « tourbillon lunaire » : une zone claire associée à une anomalie magnétique locale. Objectif : comprendre pourquoi ce coin de Lune conserve un mini-champ magnétique alors que l\'astre n\'en a plus.'},
+  {zone:'moon',badge:'badge-upcoming',status:'À venir',icon:'🛬',name:'Blue Moon MK1 « Endurance »',agency:'Blue Origin · contrat NASA',nat:'🇺🇸 États-Unis',date:'Prévu : début 2027',obj:'Premier atterrisseur cargo lourd de Blue Origin, visant le pôle Sud. Il doit démontrer la livraison de charges lourdes, indispensable pour installer une base permanente au sol.'},
+  {zone:'moon',badge:'badge-upcoming',status:'À venir',icon:'🌕',name:'Chang\'e 7 — Pôle Sud lunaire',agency:'CNSA',nat:'🇨🇳 Chine',date:'Reportée : 2027 au plus tôt',obj:'Premier atterrissage direct au pôle Sud, sur le rebord du cratère Shackleton. Ensemble complet : orbiteur, atterrisseur, rover et robot sauteur capable de plonger dans un cratère en ombre permanente pour y chercher de la glace d\'eau. Le tir prévu le 24 août 2026 a été annulé à cause du typhon Narra.'},
+  {zone:'moon',badge:'badge-upcoming',status:'À venir',icon:'🚀',name:'Artemis III — Vol habité de démonstration',agency:'NASA · ESA · JAXA · CSA',nat:'🇺🇸 États-Unis + partenaires',date:'Prévu : 2027',obj:'Après le succès d\'Artemis II (survol habité de la Lune, avril 2026), quatre astronautes testeront en orbite terrestre le rendez-vous et l\'amarrage entre le vaisseau Orion et des versions d\'essai des atterrisseurs commerciaux. Le retour d\'humains sur le sol lunaire est visé à partir de 2028.'},
+  {zone:'moon',badge:'badge-planned',status:'Planifié',icon:'🌕',name:'Chang\'e 8 — Ressources sur place',agency:'CNSA',nat:'🇨🇳 Chine',date:'Prévu : vers 2028-2029',obj:'Tester l\'exploitation des ressources locales : fabriquer des « briques » par impression 3D à partir du sol lunaire. Étape préparatoire à la station de recherche lunaire internationale (ILRS) portée par la Chine et la Russie.'},
+  {zone:'moon',badge:'badge-planned',status:'Planifié',icon:'🛬',name:'Luna 27 — Pôle Sud',agency:'Roscosmos',nat:'🇷🇺 Russie',date:'Annoncée : fin des années 2020',obj:'Atterrisseur destiné à analyser le sol du pôle Sud et à y chercher de l\'eau, après l\'échec de Luna 25 en 2023. Calendrier très incertain.'},
+  {zone:'moon',badge:'badge-planned',status:'En pause',icon:'🛸',name:'Gateway — Station en orbite lunaire',agency:'NASA · ESA · JAXA · CSA',nat:'🇺🇸🇪🇺🇯🇵🇨🇦 International',date:'Programme en pause depuis mars 2026',obj:'Petite station placée en orbite autour de la Lune, conçue comme relais vers la surface. La NASA a mis le programme en pause en mars 2026 pour donner la priorité aux infrastructures posées directement au sol ; certains modules pourraient être réutilisés autrement.'},
+
+  // ───────────── MARS ─────────────
+  {zone:'mars',badge:'badge-active',status:'En cours',icon:'🤖',name:'Perseverance — Cratère Jezero',agency:'NASA',nat:'🇺🇸 États-Unis',date:'En opération depuis février 2021',obj:'Chercher des traces de vie ancienne dans un ancien delta fluvial. Le rover scelle des tubes d\'échantillons et les met de côté en vue d\'un retour sur Terre, dont des roches « à taches de léopard » dont l\'origine, minérale ou biologique, reste indéterminée.'},
+  {zone:'mars',badge:'badge-active',status:'En cours',icon:'🤖',name:'Curiosity — Cratère Gale',agency:'NASA',nat:'🇺🇸 États-Unis',date:'En opération depuis 2012',obj:'Étudier l\'habitabilité passée de Mars en gravissant les couches du mont Sharp : chaque strate correspond à une époque différente de l\'histoire climatique de la planète.'},
+  {zone:'mars',badge:'badge-active',status:'En cours',icon:'🛸',name:'MRO & Mars Odyssey — Orbiteurs',agency:'NASA',nat:'🇺🇸 États-Unis',date:'En orbite depuis 2006 et 2001',obj:'Imagerie haute résolution, cartographie minéralogique et thermique de la surface. Ces deux vétérans servent aussi de relais radio : presque toutes les données des rovers transitent par eux.'},
+  {zone:'mars',badge:'badge-active',status:'En cours',icon:'🛸',name:'Mars Express & TGO',agency:'ESA',nat:'🇪🇺 Europe',date:'En orbite depuis 2003 et 2016',obj:'Mars Express cartographie la surface et sonde la glace enfouie ; le Trace Gas Orbiter traque les gaz rares de l\'atmosphère, notamment le méthane, dont l\'origine géologique ou biologique fait débat.'},
+  {zone:'mars',badge:'badge-active',status:'En cours',icon:'🛸',name:'Tianwen-1 — Orbiteur',agency:'CNSA',nat:'🇨🇳 Chine',date:'En orbite depuis 2021',obj:'L\'orbiteur poursuit sa cartographie et sert de relais. Le rover Zhurong, posé en 2021, est en hibernation depuis mai 2022, vraisemblablement à cause de la poussière accumulée sur ses panneaux solaires.'},
+  {zone:'mars',badge:'badge-upcoming',status:'À venir',icon:'🚀',name:'MMX — Lunes de Mars',agency:'JAXA (avec CNES, DLR, NASA, ESA)',nat:'🇯🇵 Japon',date:'Lancement : 19 octobre 2026',obj:'Explorer Phobos et Déimos et rapporter une dizaine de grammes de sol de Phobos en 2031. Enjeu scientifique : ces lunes sont-elles des astéroïdes capturés ou des débris arrachés à Mars par un impact géant ? La sonde emporte le petit rover franco-allemand IDEFIX.'},
+  {zone:'mars',badge:'badge-upcoming',status:'À venir',icon:'🤖',name:'Rosalind Franklin — ExoMars',agency:'ESA',nat:'🇪🇺 Europe',date:'Lancement : 2028 · arrivée vers 2030',obj:'Rover européen doté d\'une foreuse de deux mètres, capacité unique : atteindre des couches protégées des radiations pour y chercher des molécules organiques, dans les argiles d\'Oxia Planum. Le partenariat avec la Russie a été rompu en 2022.'},
+  {zone:'mars',badge:'badge-upcoming',status:'À venir',icon:'🚀',name:'Tianwen-3 — Retour d\'échantillons',agency:'CNSA',nat:'🇨🇳 Chine',date:'Lancement : fin 2028',obj:'Deux lancements distincts (atterrisseur avec fusée de remontée, puis orbiteur de retour) pour rapporter des échantillons martiens vers 2031. La Chine serait alors la première à ramener du sol de Mars sur Terre.'},
+  {zone:'mars',badge:'badge-planned',status:'Suspendue',icon:'⏸️',name:'Mars Sample Return (MSR)',agency:'NASA · ESA',nat:'🇺🇸🇪🇺 États-Unis / Europe',date:'Retirée des priorités NASA en 2026',obj:'Devait rapporter les tubes collectés par Perseverance. Faute de financement, le projet a été sorti de l\'agenda de la NASA en 2026. Les échantillons restent entreposés sur Mars, en attente d\'une solution.'},
+  {zone:'mars',badge:'badge-planned',status:'Planifié',icon:'🚀',name:'Starship — Vols cargo vers Mars',agency:'SpaceX',nat:'🇺🇸 États-Unis',date:'Sans date confirmée',obj:'SpaceX annonce l\'envoi de Starship cargo sans équipage lors d\'une future fenêtre de tir vers Mars (une tous les 26 mois) pour préparer une présence humaine. Aucun vol martien n\'est engagé à ce jour.'},
+
+  // ───────────── ISS & STATIONS ─────────────
+  {zone:'iss',badge:'badge-active',status:'En cours',icon:'🛸',name:'ISS — Station spatiale internationale',agency:'NASA · Roscosmos · ESA · JAXA · CSA',nat:'🌍 15 pays',date:'Occupée en continu depuis 2000',obj:'Laboratoire orbital à environ 400 km d\'altitude, habité en permanence par 7 personnes. Les partenaires se sont engagés jusqu\'en 2030 ; une désorbitation contrôlée au-dessus du Pacifique Sud est prévue vers 2030-2031 à l\'aide d\'un véhicule dédié développé par SpaceX.'},
+  {zone:'iss',badge:'badge-active',status:'En cours',icon:'🛸',name:'Tiangong — Station chinoise',agency:'CNSA',nat:'🇨🇳 Chine',date:'Opérationnelle depuis 2022',obj:'Station de trois modules occupée en permanence par trois taïkonautes. Une extension à six modules est annoncée à partir de 2027, avec une ouverture progressive à des astronautes étrangers.'},
+  {zone:'iss',badge:'badge-active',status:'En cours',icon:'🚀',name:'Crew Dragon — Rotations ISS',agency:'SpaceX · NASA',nat:'🇺🇸 États-Unis',date:'Rotations régulières',obj:'Assure depuis 2020 les relèves d\'équipage vers l\'ISS, par missions d\'environ six mois. La même architecture sert de base au véhicule qui désorbitera la station.'},
+  {zone:'iss',badge:'badge-active',status:'En cours',icon:'🚀',name:'Soyouz — Rotations ISS',agency:'Roscosmos',nat:'🇷🇺 Russie',date:'Rotations régulières',obj:'Vaisseau russe toujours amarré à la station comme véhicule de secours permanent. Transporte cosmonautes russes et astronautes partenaires.'},
+  {zone:'iss',badge:'badge-upcoming',status:'À venir',icon:'🛸',name:'Axiom Station — Modules commerciaux',agency:'Axiom Space',nat:'🇺🇸 États-Unis',date:'Premiers modules : à partir de 2027',obj:'Modules d\'abord amarrés à l\'ISS, puis détachés pour former une station indépendante vers 2028. L\'un des candidats à la succession de l\'ISS.'},
+  {zone:'iss',badge:'badge-upcoming',status:'À venir',icon:'🛸',name:'Haven-1 — Station privée',agency:'Vast',nat:'🇺🇸 États-Unis',date:'Prévu : à partir de 2027',obj:'Petite station autonome lancée d\'un seul tenant par une Falcon 9. Si elle vole, ce serait la première station commerciale indépendante mise en orbite.'},
 ];
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1105,6 +1120,15 @@ function renderEventsView(){
 // RENDU : ESPACE (accordéons)
 // ═══════════════════════════════════════════════════════════════════
 const spaceOpen={}; // état ouvert/fermé des sections
+const missionOpen={}; // état déplié/replié de chaque mission
+
+function toggleMission(key){
+  missionOpen[key]=!missionOpen[key];
+  renderSpaceView().then(html=>{
+    if(html){const tc=document.getElementById('tab-content');tc.innerHTML=html;}
+    renderNav();
+  });
+}
 
 function toggleSpaceSection(key){
   spaceOpen[key]=!spaceOpen[key];
@@ -1172,12 +1196,20 @@ async function renderSpaceView(){
 
   const missionsHTML=zones.map(z=>{
     const ms=MISSIONS.filter(m=>m.zone===z.key);
-    const content=ms.map(m=>`<div class="mission-card">
-      <div class="mission-name">${m.icon} ${m.name}</div>
-      <div class="mission-agency">${m.agency} · ${m.date}</div>
-      <div class="mission-desc">${m.desc}</div>
-      <span class="mission-badge ${m.badge}">${m.status}</span>
-    </div>`).join('');
+    const content=ms.map((m,i)=>{
+      const mk=z.key+'-'+i, mo=!!missionOpen[mk];
+      return `<div class="mission-card">
+      <div onclick="toggleMission('${mk}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;user-select:none;">
+        <div style="flex:1;min-width:0;">
+          <div class="mission-name">${m.icon} ${m.name}</div>
+          <div class="mission-agency">${m.nat} · ${m.agency}</div>
+          <div class="mission-date">${m.date}</div>
+          <span class="mission-badge ${m.badge}">${m.status}</span>
+        </div>
+        <span style="font-size:0.8rem;color:#c8b878;transition:transform 0.2s;display:inline-block;transform:rotate(${mo?'90':'0'}deg);padding-top:4px;">▶</span>
+      </div>
+      ${mo?`<div class="mission-obj"><span class="mission-obj-t">Objectif</span>${m.obj}</div>`:''}
+    </div>`;}).join('');
     const active=ms.filter(m=>m.status==='En cours').length;
     const upcoming=ms.filter(m=>m.status==='À venir'||m.status==='Planifié').length;
     const count=`${active} en cours · ${upcoming} à venir`;
@@ -1187,7 +1219,7 @@ async function renderSpaceView(){
   return `<div class="anim-in">
     ${accordion('launches','🚀 Prochains lancements — temps réel',launchContent,launchCount)}
     ${missionsHTML}
-    <p class="notice" style="margin-top:12px;">Missions : données vérifiées mi-2025. Lancements : temps réel via Launch Library 2.</p>
+    <p class="notice" style="margin-top:12px;">Missions : données vérifiées fin août 2026. Touchez une mission pour l'objectif détaillé. Lancements : temps réel via Launch Library 2.</p>
   </div>`;
 }
 
