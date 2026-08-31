@@ -247,7 +247,7 @@ function initRedMode(){
 }
 const state={ tab:0, lat:41.65, lon:-0.88, selectedDate:new Date(), calOffset:0, eventFilter:'all' };
 const wx={ data:null, lat:null, lon:null, ts:0, loading:false };
-const spx={ data:null, ts:0, loading:false };
+const spx={ data:null, ts:0, loading:false, promise:null, error:null };
 const iss={ data:null, ts:0, loading:false };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -845,19 +845,43 @@ function issVisible(issLat,issLon,issAlt,obsLat,obsLon){
   return{elevation:elevation.toFixed(0),az:az.toFixed(0),dir:dirLabel};
 }
 
-async function fetchLaunches(){
+function fetchLaunches(force){
   const now=Date.now();
-  if(spx.data&&(now-spx.ts)<900000)return spx.data;
-  if(spx.loading)return null;
-  spx.loading=true;
-  try{
-    const now2=new Date().toISOString();
-    const r=await fetch(`https://ll.thespacedevs.com/2.2.0/launch/upcoming/?format=json&limit=10&mode=list&net__gt=${encodeURIComponent(now2)}`);
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const d=await r.json();spx.data=d;spx.ts=now;return d;
-  }catch(e){console.warn('Launches:',e.message);return null;}
-  finally{spx.loading=false;}
+  if(!force&&spx.data&&(now-spx.ts)<900000)return Promise.resolve(spx.data);
+  if(spx.promise)return spx.promise;
+  spx.loading=true;spx.error=null;
+  const url='https://ll.thespacedevs.com/2.2.0/launch/upcoming/?format=json&limit=10&net__gt='+encodeURIComponent(new Date().toISOString());
+  spx.promise=(async()=>{
+    const ctl=new AbortController();
+    const to=setTimeout(()=>ctl.abort(),15000);
+    try{
+      const r=await fetch(url,{signal:ctl.signal,cache:'no-store'});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const d=await r.json();
+      spx.data=d;spx.ts=Date.now();spx.error=null;return d;
+    }catch(e){
+      spx.error=(e.name==='AbortError')?'Délai dépassé':(e.message||'Erreur réseau');
+      console.warn('Launches:',spx.error);return null;
+    }finally{clearTimeout(to);spx.loading=false;spx.promise=null;}
+  })();
+  return spx.promise;
 }
+
+// Relance manuelle depuis l'onglet Espace
+function retryLaunches(){
+  spx.data=null;spx.ts=0;spx.error=null;
+  const tc=document.getElementById('tab-content');
+  if(tc)tc.innerHTML='<div class="anim-in"><div class="loading-pulse pulse">🚀 Chargement des lancements…</div></div>';
+  fetchLaunches(true).then(()=>renderSpaceView()).then(html=>{
+    if(html){const t=document.getElementById('tab-content');if(t)t.innerHTML=html;}
+    renderNav();
+  });
+}
+
+// Drapeaux et traductions pour les lancements
+const LAUNCH_FLAGS={USA:'🇺🇸',CHN:'🇨🇳',RUS:'🇷🇺',JPN:'🇯🇵',IND:'🇮🇳',NZL:'🇳🇿',GUF:'🇬🇫',FRA:'🇫🇷',KAZ:'🇰🇿',GBR:'🇬🇧',ISR:'🇮🇱',KOR:'🇰🇷',IRN:'🇮🇷',PRK:'🇰🇵',AUS:'🇦🇺',BRA:'🇧🇷',ESP:'🇪🇸',DEU:'🇩🇪',ITA:'🇮🇹',CAN:'🇨🇦',SWE:'🇸🇪',NOR:'🇳🇴',UAE:'🇦🇪',ARE:'🇦🇪'};
+const LAUNCH_TYPES={'Communications':'Télécommunications','Earth Science':'Sciences de la Terre','Earth Observation':'Observation de la Terre','Resupply':'Ravitaillement','Test Flight':'Vol d\'essai','Human Exploration':'Vol habité','Navigation':'Navigation','Government/Top Secret':'Militaire / classifié','Astrophysics':'Astrophysique','Planetary Science':'Sciences planétaires','Lunar Exploration':'Exploration lunaire','Dedicated Rideshare':'Lancement partagé','Tourism':'Tourisme','Heliophysics':'Physique solaire','Suborbital':'Vol suborbital'};
+const LAUNCH_ORBITS={'Low Earth Orbit':'Orbite terrestre basse','Sun-Synchronous Orbit':'Orbite héliosynchrone','Geostationary Transfer Orbit':'Orbite de transfert géostationnaire','Geosynchronous Transfer Orbit':'Orbite de transfert géosynchrone','Medium Earth Orbit':'Orbite terrestre moyenne','Polar Orbit':'Orbite polaire','Elliptical Orbit':'Orbite elliptique','Highly Elliptical Orbit':'Orbite très elliptique','Lunar Orbit':'Orbite lunaire','Trans Lunar Injection':'Trajectoire lunaire','Suborbital':'Trajectoire suborbitale','Heliocentric Orbit':'Orbite héliocentrique'};
 
 function extractNightHours(data,date,sunsetH,sunriseH){
   if(!data?.hourly)return[];
@@ -1141,7 +1165,7 @@ function toggleSpaceSection(key){
 
 async function renderSpaceView(){
   const tc=document.getElementById('tab-content');
-  if(!spx.data&&!spx.loading){
+  if(!spx.data&&!spx.error){
     tc.innerHTML=`<div class="anim-in"><div class="loading-pulse pulse">🚀 Chargement des lancements…</div></div>`;
     await fetchLaunches();
   }
@@ -1166,26 +1190,57 @@ async function renderSpaceView(){
   if(spx.data&&spx.data.results&&spx.data.results.length){
     const now3=new Date();const launches=spx.data.results.filter(l=>new Date(l.net)>now3).slice(0,8);
     launchCount=`${launches.length} à venir`;
-    launchContent=launches.map(l=>{
-      const dt=new Date(l.net),diff=Math.round((dt-new Date())/86400000);
-      const when=diff<0?'Passé':diff===0?'Aujourd\'hui':diff===1?'Demain':`Dans ${diff}j`;
+    launchContent=launches.map((l,i)=>{
+      const lk='lnc-'+i, lo=!!missionOpen[lk];
+      const dt=new Date(l.net),diff=Math.round((dt-now3)/86400000);
+      const when=diff<=0?'Aujourd\'hui':diff===1?'Demain':`Dans ${diff}j`;
       const sCol=l.status?.abbrev==='Go'?'#50d080':l.status?.abbrev==='TBD'?'#c8b878':'#9a9aaa';
       const dateStr=dt.toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'});
-      return`<div class="launch-item"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-        <div style="flex:1;"><div class="launch-name">${esc(l.name)}</div>
-          <div class="launch-detail">${esc(l.launch_service_provider?.name||'')} · ${esc(l.pad?.location?.name||'')}</div>
-          ${l.mission?.type?`<div class="launch-detail">${esc(l.mission.type)}</div>`:''}
+      const hStr=dt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+      const cc=l.pad?.location?.country_code||'';
+      const flag=LAUNCH_FLAGS[cc]||'🏳️';
+      const prov=l.launch_service_provider?.name||'';
+      const rock=l.rocket?.configuration?.full_name||l.rocket?.configuration?.name||'';
+      const loc=l.pad?.location?.name||'';
+      const padN=l.pad?.name||'';
+      const mt=l.mission?.type||'';
+      const mtF=mt?(LAUNCH_TYPES[mt]||mt):'';
+      const orb=l.mission?.orbit?.name||'';
+      const orbF=orb?(LAUNCH_ORBITS[orb]||orb):'';
+      const mdesc=l.mission?.description||'';
+      const sub=[flag+' '+esc(prov||'Opérateur inconnu'),mtF?esc(mtF):''].filter(Boolean).join(' · ');
+      const rows=[
+        rock?['Lanceur',esc(rock)]:null,
+        loc?['Site',esc(padN?padN+' — '+loc:loc)]:null,
+        orbF?['Orbite',esc(orbF)]:null,
+        ['Décollage',dateStr+' à '+hStr+' (heure locale)'],
+      ].filter(Boolean).map(r=>`<div><span style="color:#7a7a95;">${r[0]} :</span> ${r[1]}</div>`).join('');
+      const details=lo?`<div class="mission-obj"><span class="mission-obj-t">Détails du lancement</span>${rows}${mdesc?`<div style="margin-top:7px;font-style:italic;color:#8a8aaa;">${esc(mdesc)}</div>`:'<div style="margin-top:7px;color:#7a7a95;">Aucun descriptif fourni par la source.</div>'}</div>`:'';
+      return`<div class="launch-item">
+        <div onclick="toggleMission('${lk}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;user-select:none;">
+          <div style="flex:1;min-width:0;">
+            <div class="launch-name">${esc(l.name)}</div>
+            <div class="launch-detail">${sub}</div>
+          </div>
+          <div style="text-align:right;min-width:72px;">
+            <div class="launch-when">${dateStr}</div>
+            <div class="sans" style="font-size:0.65rem;color:#6a6a8a;">${when}</div>
+            <div class="sans" style="font-size:0.62rem;color:${sCol};margin-top:2px;">${esc(l.status?.name||'TBD')}</div>
+            <div style="font-size:0.75rem;color:#c8b878;transition:transform 0.2s;display:inline-block;transform:rotate(${lo?'90':'0'}deg);margin-top:3px;">▶</div>
+          </div>
         </div>
-        <div style="text-align:right;min-width:65px;">
-          <div class="launch-when">${dateStr}</div>
-          <div class="sans" style="font-size:0.65rem;color:#6a6a8a;">${when}</div>
-          <div class="sans" style="font-size:0.62rem;color:${sCol};margin-top:2px;">${esc(l.status?.name||'TBD')}</div>
-        </div>
-      </div></div>`;
+        ${details}
+      </div>`;
     }).join('')+`<div style="padding:6px 14px;"><p class="notice" style="margin:0;">Source : Launch Library 2 (thespacedevs.com)</p></div>`;
+  } else if(spx.loading){
+    launchCount='chargement';
+    launchContent=`<div class="launch-item" style="color:#8a8aaa;font-family:'Fira Sans',sans-serif;font-size:0.85rem;">⏳ Chargement en cours…</div>`;
   } else {
-    launchCount='hors ligne';
-    launchContent=`<div class="launch-item" style="color:#6a6a8a;font-family:'Fira Sans',sans-serif;font-size:0.85rem;">${spx.loading?'⏳ Chargement…':'Données indisponibles hors connexion.'}</div>`;
+    launchCount=spx.error?'indisponible':'hors ligne';
+    launchContent=`<div class="launch-item" style="font-family:'Fira Sans',sans-serif;font-size:0.85rem;color:#8a8aaa;">
+      <div>Lancements indisponibles${spx.error?' ('+esc(spx.error)+')':''}.</div>
+      <div onclick="retryLaunches()" style="cursor:pointer;display:inline-block;margin-top:8px;padding:7px 14px;border:1px solid #c8b878;border-radius:8px;color:#c8b878;">↻ Réessayer</div>
+    </div>`;
   }
 
   const zones=[
