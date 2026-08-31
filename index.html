@@ -879,6 +879,42 @@ function retryLaunches(){
 }
 
 // Drapeaux et traductions pour les lancements
+// Importance d'un lancement (filtrage des notifications)
+const L_ROUTINE=/starlink|oneweb|kuiper|guowang|qianfan|thousand sails|group \d|transporter-|bandwagon-|strix|flock|blacksky|iceye|globalstar|o3b|yaogan|jilin|planet labs|batch \d|rideshare/i;
+const L_BIGROCKET=/starship|space launch system|\bsls\b|new glenn|falcon heavy|ariane 6|vulcan|\bh3\b|long march 5|long march 9|long march 10|neutron|super heavy/i;
+const L_DEEP=/lunar|trans lunar|moon|mars|heliocentric|interplanetary|lagrange|escape|\bl1\b|\bl2\b|translunar/i;
+const L_CREW=/crew-\d|soyuz ms|shenzhou|artemis|starliner|axiom mission|\bax-\d|polaris|gaganyaan/i;
+const L_SCIENCE=['Planetary Science','Astrophysics','Heliophysics','Lunar Exploration','Human Exploration'];
+
+function launchImportance(l){
+  const name=((l.name||'')+' '+(l.mission?.name||''));
+  const type=l.mission?.type||'';
+  const orbit=l.mission?.orbit?.name||'';
+  const rocket=l.rocket?.configuration?.full_name||l.rocket?.configuration?.name||'';
+  let s=0; const why=[];
+  if(L_CREW.test(name)||type==='Human Exploration'){s+=4;why.push('vol habité');}
+  if(L_DEEP.test(orbit)||L_SCIENCE.includes(type)){s+=4;why.push('mission scientifique majeure');}
+  if(/telescope|observatory|observatoire|rover|lander|orbiter|probe|sonde/i.test(name)){s+=1;if(!why.length)why.push('sonde ou observatoire');}
+  if(L_BIGROCKET.test(rocket)){s+=2;why.push('lanceur lourd');}
+  if(/maiden|first flight|demo flight|inaugural/i.test(name)){s+=3;why.push('vol inaugural');}
+  else if(type==='Test Flight'){s+=2;why.push("vol d'essai");}
+  if(type==='Resupply'){s+=3;why.push('ravitaillement de station');}
+  if(L_ROUTINE.test(name)){s-=4;}
+  return {score:s, why:why[0]||''};
+}
+const LAUNCH_IMPORTANT_MIN=3;
+function isImportantLaunch(l){return launchImportance(l).score>=LAUNCH_IMPORTANT_MIN;}
+
+// Filtre choisi par l'utilisateur : 'important' | 'all' | 'none'
+function getLaunchFilter(){
+  try{return localStorage.getItem('luna_launch_filter')||'important';}catch(e){return 'important';}
+}
+function setLaunchFilter(v){
+  try{localStorage.setItem('luna_launch_filter',v);}catch(e){}
+  render();
+  if(typeof checkAndNotify==='function'&&('Notification' in window)&&Notification.permission==='granted')checkAndNotify();
+}
+
 const LAUNCH_FLAGS={USA:'🇺🇸',CHN:'🇨🇳',RUS:'🇷🇺',JPN:'🇯🇵',IND:'🇮🇳',NZL:'🇳🇿',GUF:'🇬🇫',FRA:'🇫🇷',KAZ:'🇰🇿',GBR:'🇬🇧',ISR:'🇮🇱',KOR:'🇰🇷',IRN:'🇮🇷',PRK:'🇰🇵',AUS:'🇦🇺',BRA:'🇧🇷',ESP:'🇪🇸',DEU:'🇩🇪',ITA:'🇮🇹',CAN:'🇨🇦',SWE:'🇸🇪',NOR:'🇳🇴',UAE:'🇦🇪',ARE:'🇦🇪'};
 const LAUNCH_TYPES={'Communications':'Télécommunications','Earth Science':'Sciences de la Terre','Earth Observation':'Observation de la Terre','Resupply':'Ravitaillement','Test Flight':'Vol d\'essai','Human Exploration':'Vol habité','Navigation':'Navigation','Government/Top Secret':'Militaire / classifié','Astrophysics':'Astrophysique','Planetary Science':'Sciences planétaires','Lunar Exploration':'Exploration lunaire','Dedicated Rideshare':'Lancement partagé','Tourism':'Tourisme','Heliophysics':'Physique solaire','Suborbital':'Vol suborbital'};
 const LAUNCH_ORBITS={'Low Earth Orbit':'Orbite terrestre basse','Sun-Synchronous Orbit':'Orbite héliosynchrone','Geostationary Transfer Orbit':'Orbite de transfert géostationnaire','Geosynchronous Transfer Orbit':'Orbite de transfert géosynchrone','Medium Earth Orbit':'Orbite terrestre moyenne','Polar Orbit':'Orbite polaire','Elliptical Orbit':'Orbite elliptique','Highly Elliptical Orbit':'Orbite très elliptique','Lunar Orbit':'Orbite lunaire','Trans Lunar Injection':'Trajectoire lunaire','Suborbital':'Trajectoire suborbitale','Heliocentric Orbit':'Orbite héliocentrique'};
@@ -1219,7 +1255,7 @@ async function renderSpaceView(){
       return`<div class="launch-item">
         <div onclick="toggleMission('${lk}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;user-select:none;">
           <div style="flex:1;min-width:0;">
-            <div class="launch-name">${esc(l.name)}</div>
+            <div class="launch-name">${isImportantLaunch(l)?'⭐ ':''}${esc(l.name)}</div>
             <div class="launch-detail">${sub}</div>
           </div>
           <div style="text-align:right;min-width:72px;">
@@ -1274,7 +1310,7 @@ async function renderSpaceView(){
   return `<div class="anim-in">
     ${accordion('launches','🚀 Prochains lancements — temps réel',launchContent,launchCount)}
     ${missionsHTML}
-    <p class="notice" style="margin-top:12px;">Build v9 · 31/08/2026 — Missions : données vérifiées fin août 2026. Touchez une mission pour l'objectif détaillé. Lancements : temps réel via Launch Library 2.</p>
+    <p class="notice" style="margin-top:12px;">Build v10 · 31/08/2026 — Missions : données vérifiées fin août 2026. Touchez une mission pour l'objectif détaillé. Lancements : temps réel via Launch Library 2.</p>
   </div>`;
 }
 
@@ -1964,19 +2000,23 @@ function computeUpcomingAlerts() {
     });
   }
 
-  // 3. Lancements spatiaux notables (données API déjà chargées)
-  if(spx.data && spx.data.results){
+  // 3. Lancements spatiaux — filtrés selon le réglage de l'utilisateur
+  const lfilter = getLaunchFilter();
+  if(lfilter!=='none' && spx.data && spx.data.results){
     spx.data.results.forEach(l => {
       const d = new Date(l.net);
       if(d >= now && d <= in7days){
+        const imp = launchImportance(l);
+        if(lfilter==='important' && imp.score < LAUNCH_IMPORTANT_MIN) return;
         const diff = Math.round((d - now) / 86400000);
         const when = diff===0?"Aujourd'hui":diff===1?'Demain':`Dans ${diff} jours`;
         const provider = l.launch_service_provider?.name || '';
         alerts.push({
           id: 'launch_'+(l.id||l.name),
           title: '🚀 Luna — Lancement : ' + (l.name||'Mission spatiale'),
-          body: when + (provider?' · '+provider:''),
+          body: when + (provider?' · '+provider:'') + (imp.why?' · '+imp.why:''),
           ts: d.getTime(),
+          important: imp.score>=LAUNCH_IMPORTANT_MIN,
           diff
         });
       }
@@ -2145,6 +2185,16 @@ function renderNotifSettings() {
         </button>
         <p class="notice" style="margin-top:6px;text-align:left;">Vérifie en 2 secondes si les notifications marchent sur ton téléphone.</p>
       </div>
+    </div>
+    <div class="section">
+      <div class="section-title">🚀 Lancements notifiés</div>
+      <div style="padding:10px 14px;display:flex;gap:6px;">
+        ${[['important','Importants'],['all','Tous'],['none','Aucun']].map(o=>{
+          const on=getLaunchFilter()===o[0];
+          return `<div onclick="setLaunchFilter('${o[0]}')" style="flex:1;text-align:center;cursor:pointer;padding:9px 4px;border-radius:10px;font-family:'Fira Sans',sans-serif;font-size:0.8rem;border:1px solid ${on?'#c8b878':'rgba(255,255,255,0.12)'};background:${on?'rgba(200,184,120,0.18)':'transparent'};color:${on?'#e8dfc4':'#8a8aaa'};">${o[1]}</div>`;
+        }).join('')}
+      </div>
+      <p class="notice" style="padding:0 14px 12px;text-align:left;margin:0;">« Importants » ne retient que les vols habités, les missions scientifiques lointaines (Lune, Mars, télescopes, sondes), les vols inauguraux et les ravitaillements de station. Les lancements de routine — Starlink, OneWeb, Kuiper, constellations d'observation — sont écartés. Dans l'onglet Espace, ces lancements sont marqués d'une ⭐.</p>
     </div>
     <div class="section">
       <div class="section-title">📅 Prochaines alertes (7 jours)</div>
