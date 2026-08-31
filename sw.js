@@ -162,6 +162,6 @@ async function cacheFirst(request) {
 
 async function networkFirst(request) {
   const cache = await caches.open(CACHE_NAME);
-  try { const r = await fetch(request); if(r.ok) cache.put(request, r.clone()); return r; }
+  try { const r = await fetch(request, {cache:'reload'}); if(r.ok) cache.put(request, r.clone()); return r; }
   catch(e) { return await cache.match(request) || new Response('{"error":"offline"}', {headers:{'Content-Type':'application/json'}}); }
 }
