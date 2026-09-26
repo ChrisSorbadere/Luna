@@ -1,167 +1,77 @@
-// Luna Pro — Service Worker v4 (avec periodicSync notifications)
-const CACHE_NAME = 'luna-pro-v10';
+// Luna — Service Worker v9
+const CACHE_NAME = 'luna-v9';
+const PRECACHE = ['./', './index.html', './luna-lib.js', './manifest.json', './icon-192.png', './icon-512.png'];
+// Données en temps réel : jamais mises en cache par le service worker
+const LIVE = ['api.open-meteo.com', 'geocoding-api.open-meteo.com', 'll.thespacedevs.com', 'api.wheretheiss.at', 'celestrak.org', 'api.bigdatacloud.net'];
 
-const PRECACHE_ASSETS = [
-  './index.html',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png',
-];
-
-const NO_CACHE_DOMAINS = [
-  'll.thespacedevs.com',
-  'api.open-meteo.com',
-  'api.wheretheiss.at',
-];
-
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(PRECACHE_ASSETS))
-      .then(() => self.skipWaiting())
-  );
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE_NAME).then(c => Promise.all(PRECACHE.map(u => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));
 });
-
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== CACHE_NAME).map(x => caches.delete(x)))).then(() => self.clients.claim()));
 });
-
-self.addEventListener('fetch', event => {
-  const url = new URL(event.request.url);
-  if (NO_CACHE_DOMAINS.some(d => url.hostname === d)) {
-    event.respondWith(networkOnly(event.request));
-    return;
-  }
-  if (url.hostname.includes('googleapis.com') || url.hostname.includes('gstatic.com')) {
-    event.respondWith(networkFirst(event.request));
-    return;
-  }
-  // index.html et racine → network-first : les mises à jour arrivent immédiatement
-  if (event.request.mode === 'navigate' || url.pathname.endsWith('index.html') || url.pathname.endsWith('/')) {
-    event.respondWith(networkFirst(event.request));
-    return;
-  }
-  event.respondWith(cacheFirst(event.request));
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
+  if (LIVE.includes(url.hostname)) { e.respondWith(fetch(e.request).catch(() => new Response('{"error":"offline"}', { status: 503, headers: { 'Content-Type': 'application/json' } }))); return; }
+  // Tout le reste : réseau d'abord (mises à jour immédiates), cache en secours hors ligne
+  e.respondWith(networkFirst(e.request, url));
 });
-
-// ── Periodic Background Sync ────────────────────────────────────
-self.addEventListener('periodicsync', event => {
-  if (event.tag === 'luna-daily-check') {
-    event.waitUntil(checkAndFireNotifications());
-  }
-});
-
-async function checkAndFireNotifications() {
-  // Lire les alertes pré-calculées depuis IndexedDB
+async function networkFirst(req, url) {
+  const cache = await caches.open(CACHE_NAME);
   try {
-    const alerts = await readAlertsFromIDB();
-    if (!alerts || !alerts.length) return;
-    const now = Date.now();
-    // Lire l'historique des notifications déjà envoyées
-    const notified = await readNotifiedFromIDB();
-    for (const alert of alerts) {
-      const diff = Math.round((alert.ts - now) / 86400000);
-      if (diff >= 0 && diff <= 3) {
-        const lastSent = notified[alert.id] || 0;
-        if (now - lastSent > 86400000) {
-          await self.registration.showNotification(alert.title, {
-            body: alert.body,
-            icon: './icon-192.png',
-            badge: './icon-192.png',
-            tag: alert.id,
-            data: { url: './' },
-          });
-          notified[alert.id] = now;
-        }
-      }
-    }
-    await writeNotifiedToIDB(notified);
-  } catch(e) {
-    console.warn('[SW] periodicSync error:', e);
+    const res = await fetch(req);
+    if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone());
+    return res;
+  } catch (err) {
+    const hit = await cache.match(req, { ignoreSearch: url.origin === self.location.origin });
+    if (hit) return hit;
+    if (req.mode === 'navigate') { const idx = await cache.match('./index.html'); if (idx) return idx; }
+    return new Response('Hors ligne', { status: 503 });
   }
 }
 
-// ── IndexedDB helpers ────────────────────────────────────────────
+/* ── Alertes en arrière-plan (Periodic Background Sync) ── */
+self.addEventListener('periodicsync', e => { if (e.tag === 'luna-daily-check') e.waitUntil(checkAlerts()); });
 function openIDB() {
   return new Promise((res, rej) => {
-    const req = indexedDB.open('luna-alerts', 1);
-    req.onupgradeneeded = e => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains('events'))
-        db.createObjectStore('events', {keyPath:'id'});
-      if (!db.objectStoreNames.contains('meta'))
-        db.createObjectStore('meta', {keyPath:'key'});
-    };
-    req.onsuccess = e => res(e.target.result);
-    req.onerror = e => rej(e.target.error);
+    const r = indexedDB.open('luna-alerts', 2);
+    r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains('events')) db.createObjectStore('events', { keyPath: 'id' }); if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' }); };
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
   });
 }
-
-async function readAlertsFromIDB() {
-  const db = await openIDB();
-  return new Promise((res, rej) => {
-    const tx = db.transaction('events', 'readonly');
-    const req = tx.objectStore('events').getAll();
-    req.onsuccess = () => res(req.result);
-    req.onerror = () => rej(req.error);
-  });
+function req2p(r) { return new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+const pad = n => String(n).padStart(2, '0');
+const sod = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+function whenLong(d, now) {
+  const n = Math.round((sod(d) - sod(now)) / 86400000), t = pad(d.getHours()) + ':' + pad(d.getMinutes());
+  if (n === 0) return "Aujourd'hui à " + t;
+  if (n === 1) return 'Demain à ' + t;
+  return 'Dans ' + n + ' jours (' + d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) + ') à ' + t;
 }
-
-async function readNotifiedFromIDB() {
-  const db = await openIDB();
-  return new Promise((res) => {
-    const tx = db.transaction('meta', 'readonly');
-    const req = tx.objectStore('meta').get('notified');
-    req.onsuccess = () => res(req.result ? req.result.value : {});
-    req.onerror = () => res({});
-  });
-}
-
-async function writeNotifiedToIDB(notified) {
-  const db = await openIDB();
-  return new Promise((res, rej) => {
-    const tx = db.transaction('meta', 'readwrite');
-    tx.objectStore('meta').put({key:'notified', value:notified});
-    tx.oncomplete = res;
-    tx.onerror = rej;
-  });
-}
-
-// Notification click → ouvrir l'app
-self.addEventListener('notificationclick', event => {
-  event.notification.close();
-  event.waitUntil(
-    clients.matchAll({type:'window'}).then(cs => {
-      if (cs.length) return cs[0].focus();
-      return clients.openWindow('./');
-    })
-  );
-});
-
-async function networkOnly(request) {
-  try { return await fetch(request); }
-  catch(e) { return new Response('{"error":"offline","results":[]}', {headers:{'Content-Type':'application/json'}}); }
-}
-
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
+async function checkAlerts() {
   try {
-    const response = await fetch(request);
-    if (response.ok) { const c = await caches.open(CACHE_NAME); c.put(request, response.clone()); }
-    return response;
-  } catch(e) {
-    if (request.destination === 'document') { const f = await caches.match('./index.html'); if(f) return f; }
-    return new Response('Hors ligne', {status:503});
-  }
+    const db = await openIDB();
+    const alerts = await req2p(db.transaction('events', 'readonly').objectStore('events').getAll());
+    const metaRow = await req2p(db.transaction('meta', 'readonly').objectStore('meta').get('notified'));
+    const notified = (metaRow && metaRow.value) || {};
+    const now = new Date();
+    for (const a of alerts || []) {
+      const d = new Date(a.ts), dd = Math.round((sod(d) - sod(now)) / 86400000);
+      if (dd < 0 || dd > 3 || d < now) continue;
+      const k = a.id + (dd === 0 ? ':day' : ':pre');
+      if (notified[k]) continue;
+      await self.registration.showNotification(a.title, { body: whenLong(d, now) + ' · ' + a.body, icon: './icon-192.png', badge: './icon-192.png', tag: a.id, data: { url: './' } });
+      notified[k] = Date.now(); if (dd === 0) notified[a.id + ':pre'] = notified[a.id + ':pre'] || Date.now();
+    }
+    const tx = db.transaction('meta', 'readwrite'); tx.objectStore('meta').put({ key: 'notified', value: notified });
+    await new Promise(r => { tx.oncomplete = r; tx.onerror = r; });
+  } catch (err) { /* rien à faire */ }
 }
-
-async function networkFirst(request) {
-  const cache = await caches.open(CACHE_NAME);
-  try { const r = await fetch(request, {cache:'reload'}); if(r.ok) cache.put(request, r.clone()); return r; }
-  catch(e) { return await cache.match(request) || new Response('{"error":"offline"}', {headers:{'Content-Type':'application/json'}}); }
-}
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+    for (const c of cs) if ('focus' in c) return c.focus();
+    return self.clients.openWindow('./');
+  }));
+});
