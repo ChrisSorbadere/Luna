@@ -226,6 +226,9 @@ table.wx tr.sep th,table.wx tr.sep td{border-top:1px solid rgba(255,255,255,.06)
 .bar7 .b span{font-size:.72rem;color:var(--text2);font-variant-numeric:tabular-nums}
 .bar7lab{display:flex;gap:6px;padding:4px 14px 12px}
 .bar7lab span{flex:1;text-align:center;font-size:.68rem;color:var(--text3);text-transform:capitalize}
+.flag{font-size:1.25em;line-height:1;vertical-align:-2px;font-family:'Noto Color Emoji','Apple Color Emoji','Segoe UI Emoji',sans-serif}
+.dd.fr{color:var(--text);margin-top:4px}
+details.xs{margin-top:4px}details.xs summary{cursor:pointer;color:var(--gold)}
 </style>
 </head>
 <body>
@@ -801,9 +804,78 @@ async function fetchIssPos() {
 /* ── Lancements (Launch Library 2) ────────────────────────────────── */
 const spx = { data: null, ts: 0, failed: false, loading: false };
 const MEGACONST = /starlink|kuiper|oneweb|qianfan|guowang|thousand sails|sda tranche|bluebird/i;
+/* ── Drapeaux et descriptions en français des lancements ── */
+const COUNTRY = {
+  USA: ['US', 'États-Unis'], RUS: ['RU', 'Russie'], KAZ: ['KZ', 'Kazakhstan'], CHN: ['CN', 'Chine'], FRA: ['FR', 'France'], GUF: ['GF', 'Guyane française'],
+  JPN: ['JP', 'Japon'], IND: ['IN', 'Inde'], NZL: ['NZ', 'Nouvelle-Zélande'], GBR: ['GB', 'Royaume-Uni'], KOR: ['KR', 'Corée du Sud'], PRK: ['KP', 'Corée du Nord'],
+  IRN: ['IR', 'Iran'], ISR: ['IL', 'Israël'], DEU: ['DE', 'Allemagne'], ITA: ['IT', 'Italie'], ESP: ['ES', 'Espagne'], CAN: ['CA', 'Canada'], AUS: ['AU', 'Australie'],
+  NOR: ['NO', 'Norvège'], SWE: ['SE', 'Suède'], BRA: ['BR', 'Brésil'], ARE: ['AE', 'Émirats arabes unis'], LUX: ['LU', 'Luxembourg'], FIN: ['FI', 'Finlande'],
+  TWN: ['TW', 'Taïwan'], MHL: ['MH', 'Îles Marshall'], UKR: ['UA', 'Ukraine'], EU: ['EU', 'Europe']
+};
+// Pays de l'opérateur du tir (plus fiable que le pays du pas de tir : Arianespace tire depuis la Guyane, Rocket Lab depuis la Nouvelle-Zélande…)
+const LSP_CC = [[/SpaceX|Blue Origin|United Launch|ULA|Northrop|Firefly|Relativity|Astra|NASA|Virgin|Stoke|ABL/i, 'USA'], [/Rocket Lab/i, 'USA'],
+  [/Roscosmos|Russian|Progress Rocket|Khrunichev|VKS|Aerospace Forces/i, 'RUS'], [/CASC|China|Chinese|Galactic Energy|LandSpace|iSpace|Space Pioneer|CAS Space|Expace|Orienspace|Deep Blue/i, 'CHN'],
+  [/Arianespace|European Space Agency|ESA\b|Avio/i, 'EU'], [/ISRO|Indian|Skyroot|Agnikul|NewSpace India/i, 'IND'], [/JAXA|Mitsubishi|Interstellar Tech|Space One/i, 'JPN'],
+  [/Korea/i, 'KOR'], [/Iran/i, 'IRN'], [/Israel/i, 'ISR'], [/Isar|RFA|Rocket Factory/i, 'DEU'], [/PLD Space/i, 'ESP'], [/Gilmour/i, 'AUS'], [/Orbex|Skyrora/i, 'GBR']];
+function flagEmoji(cc) {
+  const c = COUNTRY[cc]; if (!c) return '';
+  if (c[0] === 'EU') return '🇪🇺';
+  return String.fromCodePoint(...[...c[0]].map(ch => 0x1F1E6 + ch.charCodeAt(0) - 65));
+}
+function countryName(cc) { return COUNTRY[cc] ? COUNTRY[cc][1] : ''; }
+function launchCC(l) {
+  for (const [re, cc] of LSP_CC) if (re.test(l.lsp || '')) return cc;
+  const cc = (l.lspCC || '').split(',')[0].trim();
+  if (COUNTRY[cc]) return cc;
+  return l.padCC || '';
+}
+const MTYPE_FR = {
+  'Communications': 'Satellite de télécommunications', 'Earth Science': 'Satellite d’observation de la Terre', 'Government/Top Secret': 'Satellite gouvernemental ou militaire (mission tenue secrète)',
+  'Resupply': 'Ravitaillement d’une station spatiale (vivres, matériel, carburant)', 'Human Exploration': 'Vol habité', 'Planetary Science': 'Sonde d’exploration planétaire',
+  'Astrophysics': 'Observatoire spatial d’astrophysique', 'Technology': 'Démonstration de nouvelles technologies', 'Navigation': 'Satellite de navigation (type GPS)',
+  'Tourism': 'Vol touristique', 'Dedicated Rideshare': 'Lancement groupé de nombreux petits satellites de clients différents', 'Test Flight': 'Vol d’essai du lanceur',
+  'Heliophysics': 'Mission d’étude du Soleil', 'Robotic Exploration': 'Exploration robotique', 'Space Science': 'Mission scientifique', 'Biology': 'Expériences de biologie en apesanteur',
+  'Meteorology': 'Satellite météorologique', 'Unknown': ''
+};
+const ORBIT_FR = { LEO: 'en orbite basse (quelques centaines de km)', SSO: 'en orbite héliosynchrone (passe au-dessus des pôles, toujours à la même heure solaire)',
+  GTO: 'en orbite de transfert, avant de rejoindre l’orbite géostationnaire (36 000 km)', GEO: 'en orbite géostationnaire (36 000 km, fixe au-dessus de l’équateur)',
+  MEO: 'en orbite moyenne (vers 20 000 km)', PO: 'en orbite polaire', Sub: 'en vol suborbital (monte dans l’espace puis retombe)', 'LO': 'vers la Lune', TLI: 'vers la Lune',
+  HCO: 'sur une orbite autour du Soleil', HEO: 'sur une orbite très elliptique', ELI: 'sur une orbite elliptique', GSO: 'en orbite géosynchrone', VLEO: 'en orbite très basse', L1: 'vers le point de Lagrange L1', L2: 'vers le point de Lagrange L2', MO: 'vers Mars' };
+const NAME_FR = [
+  [/Starlink/i, 'Satellites Starlink de SpaceX, pour l’accès à Internet par satellite'], [/Kuiper/i, 'Satellites Kuiper d’Amazon, pour l’accès à Internet par satellite'],
+  [/OneWeb/i, 'Satellites OneWeb d’Internet par satellite'], [/Qianfan|Thousand Sails|Guowang|SatNet/i, 'Satellites d’une méga-constellation chinoise d’Internet par satellite'],
+  [/Progress MS/i, 'Cargo russe Progress : ravitaillement de la Station spatiale internationale'], [/Soyuz MS|Soyouz MS/i, 'Vaisseau Soyouz emmenant un équipage vers la Station spatiale internationale'],
+  [/Crew-\d+|Crew Flight Test|Axiom|Ax-\d/i, 'Vaisseau Crew Dragon emmenant un équipage vers la Station spatiale internationale'],
+  [/CRS-\d+|Cargo Dragon|Cygnus|NG-\d+|Dream Chaser|HTV-X/i, 'Cargo de ravitaillement de la Station spatiale internationale'],
+  [/Shenzhou/i, 'Vaisseau Shenzhou emmenant des taïkonautes vers la station chinoise Tiangong'], [/Tianzhou/i, 'Cargo Tianzhou : ravitaillement de la station chinoise Tiangong'],
+  [/Mengzhou/i, 'Vol d’essai du nouveau vaisseau habité chinois Mengzhou'],
+  [/Starship|Flight \d+.*Starship|Super Heavy/i, 'Vol d’essai du Starship, la fusée géante de SpaceX'], [/New Shepard|NS-\d+/i, 'Vol suborbital de New Shepard (Blue Origin), avec touristes ou expériences'],
+  [/GPS/i, 'Satellite GPS américain de navigation'], [/Galileo/i, 'Satellites Galileo, le système européen de navigation'], [/Beidou/i, 'Satellite BeiDou, le système chinois de navigation'],
+  [/GLONASS|Glonass/i, 'Satellite GLONASS, le système russe de navigation'], [/Yaogan/i, 'Satellites militaires chinois d’observation (série Yaogan)'],
+  [/NROL|NRO/i, 'Satellite espion du NRO, le service américain de reconnaissance'], [/USSF|SDA|Tranche/i, 'Satellites militaires de la Force spatiale américaine'],
+  [/Transporter|Bandwagon/i, 'Lancement groupé de dizaines de petits satellites de clients différents'], [/Sentinel/i, 'Satellite Sentinel du programme européen Copernicus d’observation de la Terre'],
+  [/Artemis/i, 'Mission du programme Artemis de retour sur la Lune'], [/Chang.?e/i, 'Mission chinoise d’exploration de la Lune'], [/Tianwen/i, 'Sonde chinoise d’exploration planétaire']
+];
+function launchDescFR(l) {
+  const m = l.mission || {}, nm = (m.name || '') + ' ' + (l.name || '');
+  let s = '';
+  for (const [re, t] of NAME_FR) if (re.test(nm)) { s = t; break; }
+  if (!s) s = MTYPE_FR[m.type] || (m.type ? 'Mission : ' + m.type : 'Mission non précisée');
+  if (!s) s = 'Mission non précisée';
+  const o = ORBIT_FR[m.orbitAbbrev] || '';
+  const lcc = launchCC(l);
+  const cust = (m.ag || []).find(a => a.name && !(l.lsp || '').includes(a.name) && !/SpaceX/i.test(a.name) || false);
+  let who = '';
+  if (cust && !/Starlink|Kuiper|Progress|Soyuz|Shenzhou|Tianzhou|Crew/i.test(nm)) {
+    const cc = (cust.cc || '').split(',')[0].trim();
+    who = (o ? ',' : '') + ' pour ' + cust.name + (cc && cc !== lcc && COUNTRY[cc] ? ' (' + countryName(cc) + ' ' + flagEmoji(cc) + ')' : '');
+  }
+  if (o && !/Station spatiale|Tiangong|suborbital|Lune|navigation/i.test(s)) s += ', ' + o;
+  return s + who + '.';
+}
 function launchNotable(l) { return !MEGACONST.test(l.name || ''); }
 async function fetchLaunches(force) {
-  const c = store.get('ll2', null);
+  const c = store.get('ll2b', null);
   if (!force && c && Date.now() - c.ts < 30 * MIN) { spx.data = c.data; spx.ts = c.ts; return spx.data; }
   if (spx.loading) return spx.data;
   spx.loading = true;
@@ -814,11 +886,14 @@ async function fetchLaunches(force) {
     const j = await r.json();
     const data = (j.results || []).map(l => ({
       id: l.id, name: l.name, net: l.net, status: l.status ? (l.status.abbrev || '') : '', statusName: l.status ? l.status.name : '',
-      lsp: l.launch_service_provider ? l.launch_service_provider.name : '', rocket: l.rocket && l.rocket.configuration ? l.rocket.configuration.full_name || l.rocket.configuration.name : '',
-      pad: l.pad && l.pad.location ? l.pad.location.name : '', mission: l.mission ? { type: l.mission.type, orbit: l.mission.orbit ? l.mission.orbit.name : '', desc: l.mission.description } : null
+      lsp: l.launch_service_provider ? l.launch_service_provider.name : '', lspCC: l.launch_service_provider && l.launch_service_provider.country_code || '',
+      rocket: l.rocket && l.rocket.configuration ? l.rocket.configuration.full_name || l.rocket.configuration.name : '',
+      pad: l.pad && l.pad.location ? l.pad.location.name : '', padCC: (l.pad && (l.pad.country_code || (l.pad.location && l.pad.location.country_code))) || '',
+      mission: l.mission ? { name: l.mission.name || '', type: l.mission.type, orbit: l.mission.orbit ? l.mission.orbit.name : '', orbitAbbrev: l.mission.orbit ? l.mission.orbit.abbrev || '' : '', desc: l.mission.description,
+        ag: (l.mission.agencies || []).map(a => ({ name: a.name, cc: a.country_code || '' })) } : null
     }));
     spx.data = data; spx.ts = Date.now(); spx.failed = false;
-    store.set('ll2', { ts: spx.ts, data });
+    store.set('ll2b', { ts: spx.ts, data });
   } catch (e) {
     spx.failed = true;
     if (c) { spx.data = c.data; spx.ts = c.ts; }
@@ -903,6 +978,8 @@ function moonIconURL(phaseDeg, size) {
 
 /* ── Missions spatiales (état vérifié au 25 septembre 2026) ───────── */
 const MISSIONS_DATE = '25 septembre 2026';
+const AG_FLAG = [[/NASA|SpaceX|Firefly|Blue Origin|Rocket Lab|Vast/, 'USA'], [/ESA/, 'EU'], [/CNSA|Chine/, 'CHN'], [/JAXA|Japon/, 'JPN'], [/Roscosmos/, 'RUS'], [/CSA/, 'CAN']];
+function missionFlags(ag) { const out = []; for (const [re, cc] of AG_FLAG) { if (re.test(ag) && !out.includes(cc)) out.push(cc); } return out.map(flagEmoji).join(' '); }
 const MISSIONS = [
   { z: 'moon', s: 'done', name: 'Artemis II', ag: 'NASA', when: 'Réussie · 1er–10 avril 2026', d: 'Premier vol habité autour de la Lune depuis 1972 : Reid Wiseman, Victor Glover, Christina Koch et Jeremy Hansen ont contourné la Lune à bord d’Orion.' },
   { z: 'moon', s: 'next', name: 'Artemis III', ag: 'NASA', when: 'Prévue fin 2027', d: 'Nouveau format : vol habité en orbite terrestre pour tester l’amarrage d’Orion avec les atterrisseurs lunaires de SpaceX et Blue Origin.' },
@@ -1804,7 +1881,7 @@ VIEWS.space = function () {
   h += acc('launch', icon('launch', 'c-launch'), 'Prochains lancements', L.length ? L.length + ' à venir' : (spx.loading ? 'chargement…' : spx.failed ? 'hors ligne' : ''),
     L.length ? L.slice(0, 15).map(l => {
       const d = new Date(l.net), st = /Go/i.test(l.status) ? 'b-good' : /TBD|TBC/i.test(l.status) ? 'b-grey' : 'b-gold';
-      return '<div class="item"><span class="ic c-launch" style="opacity:' + (launchNotable(l) ? 1 : 0.55) + '">' + icon('launch') + '</span><div class="bd"><div class="tt">' + esc(l.name) + '</div><div class="dd">' + esc([l.lsp, l.pad].filter(Boolean).join(' · ')) + (l.mission && l.mission.type ? '<br>' + esc(l.mission.type + (l.mission.orbit ? ' · ' + l.mission.orbit : '')) : '') + '</div></div>' +
+      return '<div class="item"><span class="ic c-launch" style="opacity:' + (launchNotable(l) ? 1 : 0.55) + '">' + icon('launch') + '</span><div class="bd"><div class="tt">' + esc(l.name) + '</div><div class="dd"><span class="flag">' + flagEmoji(launchCC(l)) + '</span> ' + esc(l.lsp + (countryName(launchCC(l)) ? ' (' + countryName(launchCC(l)) + ')' : '')) + '</div><div class="dd">Pas de tir : ' + esc(l.pad) + (l.padCC && l.padCC !== launchCC(l) && COUNTRY[l.padCC] ? ' <span class="flag">' + flagEmoji(l.padCC) + '</span>' : '') + '</div><div class="dd fr">' + esc(launchDescFR(l)) + '</div>' + (l.mission && l.mission.desc && l.mission.desc.length > 3 ? '<details class="xs muted"><summary>Texte d’origine (anglais)</summary>' + esc(l.mission.desc) + '</details>' : '') + '</div>' +
         '<div class="rt"><div class="dt">' + fmtDay(d) + '</div><div class="wn">' + fmtTime(d) + ' · ' + whenLabel(d) + '</div><div style="margin-top:4px"><span class="badge ' + st + '">' + esc(l.status || '?') + '</span></div></div></div>';
     }).join('') + '<p class="note" style="margin:8px 12px 12px">Source : Launch Library 2 (The Space Devs) · mis à jour ' + (spx.ts ? fmtTime(new Date(spx.ts)) : '') + '</p>'
       : '<div class="empty">' + (spx.loading ? 'Chargement…' : 'Lancements indisponibles (connexion ?).') + '</div>');
@@ -1817,7 +1894,7 @@ VIEWS.space = function () {
   h += acc('isslive', icon('iss', 'c-launch'), 'ISS en direct', p ? 'maj ' + fmtTime(new Date(iss.posTs)) : '', issBody);
   zones.forEach(([z, label, ic]) => {
     const ms = MISSIONS.filter(m => m.z === z);
-    h += acc(z, icon(ic, 'gold'), label, ms.length + ' missions', ms.map(m => '<div class="item" style="display:block"><div style="display:flex;gap:8px;align-items:baseline;justify-content:space-between"><div class="tt">' + esc(m.name) + '</div>' + badge(m.s) + '</div><div class="dd gold">' + esc(m.ag) + ' · ' + esc(m.when) + '</div><div class="dd">' + esc(m.d) + '</div></div>').join(''));
+    h += acc(z, icon(ic, 'gold'), label, ms.length + ' missions', ms.map(m => '<div class="item" style="display:block"><div style="display:flex;gap:8px;align-items:baseline;justify-content:space-between"><div class="tt">' + esc(m.name) + '</div>' + badge(m.s) + '</div><div class="dd gold"><span class="flag">' + missionFlags(m.ag) + '</span> ' + esc(m.ag) + ' · ' + esc(m.when) + '</div><div class="dd">' + esc(m.d) + '</div></div>').join(''));
   });
   h += '<p class="note">Fiches des missions vérifiées le ' + MISSIONS_DATE + '. Lancements et ISS en temps réel.</p>';
   return h;
