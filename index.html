@@ -229,6 +229,12 @@ table.wx tr.sep th,table.wx tr.sep td{border-top:1px solid rgba(255,255,255,.06)
 .flag{font-size:1.25em;line-height:1;vertical-align:-2px;font-family:'Noto Color Emoji','Apple Color Emoji','Segoe UI Emoji',sans-serif}
 .dd.fr{color:var(--text);margin-top:4px}
 details.xs{margin-top:4px}details.xs summary{cursor:pointer;color:var(--gold)}
+.item.launch{display:block}
+.lhead{display:flex;gap:12px;align-items:center}
+.lhead .tt{flex:1;min-width:0}
+.lhead .badge{flex:none}
+.lwhen{color:var(--gold);margin:8px 0 2px;font-size:.95rem}
+.nowrap{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -803,7 +809,7 @@ async function fetchIssPos() {
 
 /* ── Lancements (Launch Library 2) ────────────────────────────────── */
 const spx = { data: null, ts: 0, failed: false, loading: false };
-const MEGACONST = /starlink|kuiper|oneweb|qianfan|guowang|thousand sails|sda tranche|bluebird/i;
+const MEGACONST = /starlink|kuiper|amazon leo|oneweb|qianfan|guowang|thousand sails|sda tranche|bluebird/i;
 /* ── Drapeaux et descriptions en français des lancements ── */
 const COUNTRY = {
   USA: ['US', 'États-Unis'], RUS: ['RU', 'Russie'], KAZ: ['KZ', 'Kazakhstan'], CHN: ['CN', 'Chine'], FRA: ['FR', 'France'], GUF: ['GF', 'Guyane française'],
@@ -842,7 +848,7 @@ const ORBIT_FR = { LEO: 'en orbite basse (quelques centaines de km)', SSO: 'en o
   MEO: 'en orbite moyenne (vers 20 000 km)', PO: 'en orbite polaire', Sub: 'en vol suborbital (monte dans l’espace puis retombe)', 'LO': 'vers la Lune', TLI: 'vers la Lune',
   HCO: 'sur une orbite autour du Soleil', HEO: 'sur une orbite très elliptique', ELI: 'sur une orbite elliptique', GSO: 'en orbite géosynchrone', VLEO: 'en orbite très basse', L1: 'vers le point de Lagrange L1', L2: 'vers le point de Lagrange L2', MO: 'vers Mars' };
 const NAME_FR = [
-  [/Starlink/i, 'Satellites Starlink de SpaceX, pour l’accès à Internet par satellite'], [/Kuiper/i, 'Satellites Kuiper d’Amazon, pour l’accès à Internet par satellite'],
+  [/Starlink/i, 'Satellites Starlink de SpaceX, pour l’accès à Internet par satellite'], [/Kuiper|Amazon Leo/i, 'Satellites Amazon Leo (ex-Kuiper), la constellation d’Amazon pour l’accès à Internet par satellite'],
   [/OneWeb/i, 'Satellites OneWeb d’Internet par satellite'], [/Qianfan|Thousand Sails|Guowang|SatNet/i, 'Satellites d’une méga-constellation chinoise d’Internet par satellite'],
   [/Progress MS/i, 'Cargo russe Progress : ravitaillement de la Station spatiale internationale'], [/Soyuz MS|Soyouz MS/i, 'Vaisseau Soyouz emmenant un équipage vers la Station spatiale internationale'],
   [/Crew-\d+|Crew Flight Test|Axiom|Ax-\d/i, 'Vaisseau Crew Dragon emmenant un équipage vers la Station spatiale internationale'],
@@ -866,7 +872,7 @@ function launchDescFR(l) {
   const lcc = launchCC(l);
   const cust = (m.ag || []).find(a => a.name && !(l.lsp || '').includes(a.name) && !/SpaceX/i.test(a.name) || false);
   let who = '';
-  if (cust && !/Starlink|Kuiper|Progress|Soyuz|Shenzhou|Tianzhou|Crew/i.test(nm)) {
+  if (cust && !/Starlink|Kuiper|Amazon Leo|Progress|Soyuz|Shenzhou|Tianzhou|Crew/i.test(nm)) {
     const cc = (cust.cc || '').split(',')[0].trim();
     who = (o ? ',' : '') + ' pour ' + cust.name + (cc && cc !== lcc && COUNTRY[cc] ? ' (' + countryName(cc) + ' ' + flagEmoji(cc) + ')' : '');
   }
@@ -1881,8 +1887,12 @@ VIEWS.space = function () {
   h += acc('launch', icon('launch', 'c-launch'), 'Prochains lancements', L.length ? L.length + ' à venir' : (spx.loading ? 'chargement…' : spx.failed ? 'hors ligne' : ''),
     L.length ? L.slice(0, 15).map(l => {
       const d = new Date(l.net), st = /Go/i.test(l.status) ? 'b-good' : /TBD|TBC/i.test(l.status) ? 'b-grey' : 'b-gold';
-      return '<div class="item"><span class="ic c-launch" style="opacity:' + (launchNotable(l) ? 1 : 0.55) + '">' + icon('launch') + '</span><div class="bd"><div class="tt">' + esc(l.name) + '</div><div class="dd"><span class="flag">' + flagEmoji(launchCC(l)) + '</span> ' + esc(l.lsp + (countryName(launchCC(l)) ? ' (' + countryName(launchCC(l)) + ')' : '')) + '</div><div class="dd">Pas de tir : ' + esc(l.pad) + (l.padCC && l.padCC !== launchCC(l) && COUNTRY[l.padCC] ? ' <span class="flag">' + flagEmoji(l.padCC) + '</span>' : '') + '</div><div class="dd fr">' + esc(launchDescFR(l)) + '</div>' + (l.mission && l.mission.desc && l.mission.desc.length > 3 ? '<details class="xs muted"><summary>Texte d’origine (anglais)</summary>' + esc(l.mission.desc) + '</details>' : '') + '</div>' +
-        '<div class="rt"><div class="dt">' + fmtDay(d) + '</div><div class="wn">' + fmtTime(d) + ' · ' + whenLabel(d) + '</div><div style="margin-top:4px"><span class="badge ' + st + '">' + esc(l.status || '?') + '</span></div></div></div>';
+      const cc = launchCC(l), cn = countryName(cc);
+      return '<div class="item launch"><div class="lhead"><span class="ic c-launch" style="opacity:' + (launchNotable(l) ? 1 : 0.55) + '">' + icon('launch') + '</span><div class="tt">' + esc(l.name) + '</div><span class="badge ' + st + '">' + esc(l.status || '?') + '</span></div>' +
+        '<div class="lwhen">' + fmtDay(d) + ' · ' + fmtTime(d) + ' <span class="muted">· ' + whenLabel(d) + '</span></div>' +
+        '<div class="dd"><span class="nowrap"><span class="flag">' + flagEmoji(cc) + '</span> ' + esc(l.lsp) + '</span>' + (cn ? ' (' + esc(cn) + ')' : '') + '</div>' +
+        '<div class="dd">Pas de tir : ' + esc(l.pad) + (l.padCC && l.padCC !== cc && COUNTRY[l.padCC] ? ' <span class="flag">' + flagEmoji(l.padCC) + '</span>' : '') + '</div>' +
+        '<div class="dd fr">' + esc(launchDescFR(l)) + '</div>' + (l.mission && l.mission.desc && l.mission.desc.length > 3 ? '<details class="xs muted"><summary>Texte d’origine (anglais)</summary>' + esc(l.mission.desc) + '</details>' : '') + '</div>';
     }).join('') + '<p class="note" style="margin:8px 12px 12px">Source : Launch Library 2 (The Space Devs) · mis à jour ' + (spx.ts ? fmtTime(new Date(spx.ts)) : '') + '</p>'
       : '<div class="empty">' + (spx.loading ? 'Chargement…' : 'Lancements indisponibles (connexion ?).') + '</div>');
   /* ISS en direct */
