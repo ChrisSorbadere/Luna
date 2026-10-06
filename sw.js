@@ -1,5 +1,5 @@
-// Luna — Service Worker v12
-const CACHE_NAME = 'luna-v12';
+// Luna — Service Worker v13
+const CACHE_NAME = 'luna-v13';
 const PRECACHE = ['./', './index.html', './luna-lib.js', './manifest.json', './icon-192.png', './icon-512.png'];
 // Données en temps réel : jamais mises en cache par le service worker
 const LIVE = ['api.open-meteo.com', 'geocoding-api.open-meteo.com', 'll.thespacedevs.com', 'api.wheretheiss.at', 'celestrak.org', 'api.bigdatacloud.net'];
@@ -56,8 +56,10 @@ async function checkAlerts() {
     const metaRow = await req2p(db.transaction('meta', 'readonly').objectStore('meta').get('notified'));
     const notified = (metaRow && metaRow.value) || {};
     const now = new Date();
+    // Heures calmes 22 h – 8 h : on n'envoie rien, les alertes partiront à la prochaine vérification après 8 h
+    if (now.getHours() >= 22 || now.getHours() < 8) return;
     for (const a of alerts || []) {
-      const d = new Date(a.ts), dd = Math.round((sod(d) - sod(now)) / 86400000);
+      const d = new Date(a.ts), dd = Math.round((sod(new Date(a.ts - 8 * 3600000)) - sod(now)) / 86400000);
       if (dd < 0 || dd > 3 || d < now) continue;
       const k = a.id + (dd === 0 ? ':day' : ':pre');
       if (notified[k]) continue;

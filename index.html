@@ -1970,7 +1970,7 @@ function renderSheet() {
     if (perm === 'granted') h += '<div class="pad" style="padding-top:0"><button class="btn block" data-act="notiftest">' + icon('bell') + 'Envoyer une notification de test</button></div>';
     h += '<div class="row"><span class="l"><b>Me prévenir pour…</b><div class="xs muted">3 jours avant, puis le jour même</div></span></div>' +
       ALERT_TYPES.map(([k, l, s]) => '<button class="row" style="width:100%;text-align:left" data-act="alerttype" data-arg="' + k + '"><span class="l">' + l + (s ? '<div class="xs muted">' + s + '</div>' : '') + '</span><span class="switch' + (state.settings.alerts[k] ? ' on' : '') + '"></span></button>').join('');
-    h += '<div class="pad small dim">Les alertes partent à l’ouverture de Luna et, si Android le permet, en arrière-plan : ouvre l’appli au moins une fois par semaine. Les autres lancements restent visibles dans l’onglet Espace, sans notification.</div>';
+    h += '<div class="pad small dim">Les alertes partent à l’ouverture de Luna et, si Android le permet, en arrière-plan : ouvre l’appli au moins une fois par semaine. Heures calmes : rien n’est envoyé entre 22 h et 8 h ; les alertes de la nuit partent à partir de 8 h. Les autres lancements restent visibles dans l’onglet Espace, sans notification.</div>';
     h += '<div class="row"><span class="l"><b>Dans les 7 prochains jours</b></span></div><div id="alist">' + alertListHTML() + '</div></div>';
     /* À propos */
     h += '<h3 class="st">' + icon('info') + ' À propos</h3><div class="card pad small dim" style="line-height:1.6">Luna ' + APP_VERSION + '. Calculs astronomiques : astronomy-engine (Don Cross, MIT). Satellites : satellite.js (MIT). Étoiles et constellations : catalogue HYG via d3-celestial. Météo : Open-Meteo (CC BY 4.0). Lancements : Launch Library 2 (The Space Devs). ISS : wheretheiss.at. Lieux : Open-Meteo et BigDataCloud. Heures affichées à l’heure de ton téléphone.</div>';
@@ -2046,6 +2046,10 @@ function buildAlerts() {
   for (const l of spx.data || []) { const d = new Date(l.net); if (d > now && d < end && state.settings.alerts.launch && launchDeep(l)) out.push({ id: 'L' + l.id, ts: d.getTime(), title: 'Luna · Lancement : ' + l.name, body: [l.lsp, l.pad].filter(Boolean).join(' · '), cat: 'launch' }); }
   return out.sort((a, b) => a.ts - b.ts);
 }
+/* Heures calmes : aucune notification de 22 h à 8 h ; les alertes retenues partent à la première vérification après 8 h.
+   Un événement avant 8 h est annoncé « le jour même » dès la veille au matin. */
+const QUIET_START = 22, QUIET_END = 8;
+function isQuiet(d) { const h = d.getHours(); return h >= QUIET_START || h < QUIET_END; }
 async function scheduleAlerts() {
   if (!('Notification' in window) || Notification.permission !== 'granted' || !('serviceWorker' in navigator)) return;
   try {
@@ -2054,8 +2058,8 @@ async function scheduleAlerts() {
     await idbPutAlerts(list).catch(() => {});
     const notified = (await idbMeta('notified').catch(() => null)) || {};
     const now = new Date();
-    for (const a of list) {
-      const d = new Date(a.ts), dd = dayDiff(now, d);
+    if (!isQuiet(now)) for (const a of list) {
+      const d = new Date(a.ts), dd = dayDiff(now, new Date(a.ts - QUIET_END * HOUR));
       if (dd < 0 || dd > 3 || d < now) continue;
       const k = a.id + (dd === 0 ? ':day' : ':pre');
       if (notified[k]) continue;
