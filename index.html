@@ -315,6 +315,16 @@ const state = {
   calSel: null,
   settings: Object.assign({ text: 'grand', red: false, anim: true }, store.get('settings', {}))
 };
+const ALERT_TYPES = [['full', 'Pleines lunes', 'super lune, lune bleue'], ['new', 'Nouvelles lunes', 'nuits noires'], ['eclipse', 'Éclipses visibles d’ici', ''], ['meteor', 'Étoiles filantes', 'au pic de chaque pluie'], ['season', 'Équinoxes et solstices', ''], ['planet', 'Planètes', 'oppositions, rapprochements'], ['launch', 'Lancements vers la Lune ou Mars', '']];
+const ALERT_DEF = { full: true, new: false, eclipse: true, meteor: true, season: true, planet: false, launch: true };
+state.settings.alerts = Object.assign({}, ALERT_DEF, state.settings.alerts || {});
+function alertKind(e) { return e.cat === 'moon' ? (e.kind === 'new' ? 'new' : 'full') : e.cat; }
+const DEEP_RE = /artemis|chang.?e|tianwen|blue ghost|blue moon|intuitive machines|\bIM-\d|griffin|\bMMX\b|escapade|chandrayaan|hakuto|ispace|lunar|luna-\d|moon|lune|mars|mangalyaan|rashid|exomars|rosalind franklin|mengzhou.*lan.?yue/i;
+function launchDeep(l) {
+  const m = l.mission || {};
+  if (/lunar|selen|moon|mars|areo|trans.?lunar/i.test(m.orbit || '') || /^(LO|TLI|MO|TMI)$/i.test(m.orbitAbbrev || '')) return true;
+  return DEEP_RE.test((m.name || '') + ' ' + (l.name || ''));
+}
 function saveSettings() { store.set('settings', state.settings); }
 
 /* ── Observateur & positions ───────────────────────────────────────── */
@@ -1958,9 +1968,10 @@ function renderSheet() {
     if (perm === 'default') h += '<div class="pad" style="padding-top:0"><button class="btn solid block" data-act="notifon">' + icon('bell') + 'Activer les alertes</button></div>';
     if (perm === 'denied') h += '<div class="pad small muted" style="padding-top:0">Pour les réactiver : Chrome → ⋮ → Paramètres → Paramètres des sites → Notifications → autoriser ce site.</div>';
     if (perm === 'granted') h += '<div class="pad" style="padding-top:0"><button class="btn block" data-act="notiftest">' + icon('bell') + 'Envoyer une notification de test</button></div>';
-    h += '<div class="pad small dim" style="padding-top:0">Tu es prévenu 3 jours avant puis le jour même : pleines et nouvelles lunes (super lunes, lunes bleues), éclipses visibles d’ici, étoiles filantes, saisons, oppositions, rapprochements de planètes et lancements spatiaux marquants. Les alertes partent à l’ouverture de Luna et, si Android le permet, en arrière-plan : ouvre l’appli au moins une fois par semaine.</div>';
-    const al = buildAlerts();
-    h += '<div class="row"><span class="l"><b>Dans les 7 prochains jours</b></span></div>' + (al.length ? al.slice(0, 12).map(a => { const d = new Date(a.ts); return '<div class="item"><span class="ic c-' + a.cat + '">' + icon(a.cat) + '</span><div class="bd"><div class="tt">' + esc(a.title.replace('Luna · ', '')) + '</div><div class="dd">' + esc(a.body) + '</div></div><div class="rt"><div class="dt">' + fmtDay(d) + '</div><div class="wn">' + fmtTime(d) + '</div></div></div>'; }).join('') : '<div class="empty">Rien de prévu cette semaine.</div>') + '</div>';
+    h += '<div class="row"><span class="l"><b>Me prévenir pour…</b><div class="xs muted">3 jours avant, puis le jour même</div></span></div>' +
+      ALERT_TYPES.map(([k, l, s]) => '<button class="row" style="width:100%;text-align:left" data-act="alerttype" data-arg="' + k + '"><span class="l">' + l + (s ? '<div class="xs muted">' + s + '</div>' : '') + '</span><span class="switch' + (state.settings.alerts[k] ? ' on' : '') + '"></span></button>').join('');
+    h += '<div class="pad small dim">Les alertes partent à l’ouverture de Luna et, si Android le permet, en arrière-plan : ouvre l’appli au moins une fois par semaine. Les autres lancements restent visibles dans l’onglet Espace, sans notification.</div>';
+    h += '<div class="row"><span class="l"><b>Dans les 7 prochains jours</b></span></div><div id="alist">' + alertListHTML() + '</div></div>';
     /* À propos */
     h += '<h3 class="st">' + icon('info') + ' À propos</h3><div class="card pad small dim" style="line-height:1.6">Luna ' + APP_VERSION + '. Calculs astronomiques : astronomy-engine (Don Cross, MIT). Satellites : satellite.js (MIT). Étoiles et constellations : catalogue HYG via d3-celestial. Météo : Open-Meteo (CC BY 4.0). Lancements : Launch Library 2 (The Space Devs). ISS : wheretheiss.at. Lieux : Open-Meteo et BigDataCloud. Heures affichées à l’heure de ton téléphone.</div>';
   }
@@ -2023,12 +2034,16 @@ async function idbMeta(key, val) {
     else { s.put({ key, value: val }); tx.oncomplete = () => res(val); tx.onerror = () => rej(tx.error); }
   });
 }
+function alertListHTML() {
+  const al = buildAlerts();
+  return al.length ? al.slice(0, 12).map(a => { const d = new Date(a.ts); return '<div class="item"><span class="ic c-' + a.cat + '">' + icon(a.cat) + '</span><div class="bd"><div class="tt">' + esc(a.title.replace('Luna · ', '')) + '</div><div class="dd">' + esc(a.body) + '</div></div><div class="rt"><div class="dt">' + fmtDay(d) + '</div><div class="wn">' + fmtTime(d) + '</div></div></div>'; }).join('') : '<div class="empty">Rien de prévu cette semaine.</div>';
+}
 function buildAlerts() {
   const now = new Date(), end = addDays(startOfDay(now), 8), out = [];
   const y = now.getFullYear();
   if (eventsReady(y) && eventsReady(y + 1))
-    for (const e of eventsBetween(new Date(now.getTime() - 2 * HOUR), end)) if (e.notify) out.push({ id: e.id, ts: e.date.getTime(), title: 'Luna · ' + e.title, body: e.short || e.detail, cat: e.cat });
-  for (const l of spx.data || []) { const d = new Date(l.net); if (d > now && d < end && launchNotable(l)) out.push({ id: 'L' + l.id, ts: d.getTime(), title: 'Luna · Lancement : ' + l.name, body: [l.lsp, l.pad].filter(Boolean).join(' · '), cat: 'launch' }); }
+    for (const e of eventsBetween(new Date(now.getTime() - 2 * HOUR), end)) if (e.notify && state.settings.alerts[alertKind(e)]) out.push({ id: e.id, ts: e.date.getTime(), title: 'Luna · ' + e.title, body: e.short || e.detail, cat: e.cat });
+  for (const l of spx.data || []) { const d = new Date(l.net); if (d > now && d < end && state.settings.alerts.launch && launchDeep(l)) out.push({ id: 'L' + l.id, ts: d.getTime(), title: 'Luna · Lancement : ' + l.name, body: [l.lsp, l.pad].filter(Boolean).join(' · '), cat: 'launch' }); }
   return out.sort((a, b) => a.ts - b.ts);
 }
 async function scheduleAlerts() {
@@ -2090,6 +2105,7 @@ const ACT = {
   close: () => closeSheet(),
   gps: () => geolocate(true),
   setloc: g => { const r = _geoResults[+g]; if (r) { setLocation(r.latitude, r.longitude, r.name, 'manual'); toast('Lieu : ' + r.name); closeSheet(); } },
+  alerttype: (g, b) => { state.settings.alerts[g] = !state.settings.alerts[g]; saveSettings(); const sw = b.querySelector('.switch'); if (sw) sw.classList.toggle('on', state.settings.alerts[g]); const al = document.getElementById('alist'); if (al) al.innerHTML = alertListHTML(); scheduleAlerts(); },
   textsize: g => { state.settings.text = g; saveSettings(); applySettings(); renderSheet(); render(null); },
   red: () => { state.settings.red = !state.settings.red; saveSettings(); applySettings(); renderSheet(); },
   anim: () => { state.settings.anim = !state.settings.anim; saveSettings(); applySettings(); renderSheet(); },
