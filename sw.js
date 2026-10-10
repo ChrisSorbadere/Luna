@@ -1,5 +1,5 @@
-// Luna — Service Worker v13
-const CACHE_NAME = 'luna-v13';
+// Luna — Service Worker v15
+const CACHE_NAME = 'luna-v15';
 const PRECACHE = ['./', './index.html', './luna-lib.js', './manifest.json', './icon-192.png', './icon-512.png'];
 // Données en temps réel : jamais mises en cache par le service worker
 const LIVE = ['api.open-meteo.com', 'geocoding-api.open-meteo.com', 'll.thespacedevs.com', 'api.wheretheiss.at', 'celestrak.org', 'api.bigdatacloud.net'];
