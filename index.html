@@ -345,6 +345,43 @@ html.homeopen body{overflow:hidden}
 .hm-enter svg{width:30px;height:30px;color:var(--cy)}
 .hm-night{align-self:center;display:flex;align-items:center;gap:8px;background:none;border:0;color:var(--txt2);font:inherit;font-size:1rem;padding:8px 14px;cursor:pointer}
 .hm-night svg{width:22px;height:22px;color:var(--cy)}
+
+/* largeur : rien ne doit déborder, quel que soit l'écran ou la taille du texte */
+#home{overflow-x:hidden}
+.hm-wrap{overflow-x:hidden;max-width:min(480px,100vw);box-sizing:border-box}
+#home *{min-width:0;overflow-wrap:break-word}
+#home .hm-status .hm-loc{min-width:160px}
+#home .hm-status .on{flex:1 1 auto}
+@media (max-width:400px){.hm-status .sep{display:none}}
+.hm-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.hm-ros{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+.hx.ro>.b>.in{padding:9px 2px 10px}
+.hx.ro .k{font-size:clamp(.62rem,2.9vw,.8rem)}
+.hx.ro b{font-size:clamp(.85rem,4.2vw,1.15rem)}
+.hx.ro b.ph{font-size:clamp(.7rem,3.3vw,.9rem)}
+.hm-logo{font-size:clamp(1.7rem,9vw,2.6rem)}
+.hm-logoic svg{width:clamp(38px,12vw,54px);height:clamp(38px,12vw,54px)}
+.hm-gear{width:clamp(44px,13vw,56px);height:clamp(44px,13vw,56px)}
+.hm-subtitle{font-size:clamp(.82rem,4vw,1.05rem)}
+.hx.hm-head>.b>.in{padding:12px 12px;gap:10px}
+.hx.hm-status>.b>.in{flex-wrap:wrap;padding:10px 12px;gap:8px 12px}
+.hm-clock #hmtime{font-size:clamp(2rem,11vw,3rem)}
+.hm-clock #hmdate{font-size:clamp(.9rem,4.4vw,1.15rem);text-align:center}
+.hm-scope{width:min(70vw,290px)}
+.hm-row{gap:10px}
+.hm-thumb{width:clamp(60px,19vw,96px);height:clamp(60px,19vw,96px)}
+.hx.tile>.b>.in{padding:12px 10px 12px 12px}
+.hm-tt{font-size:clamp(.82rem,4vw,1.02rem)}
+.hx.tile.wide .hm-tt,.hx.tile.wide .hm-tt .no{font-size:clamp(.95rem,4.6vw,1.15rem)}
+.hm-th .chev svg{width:20px;height:20px}
+.hm-tic svg{width:24px;height:24px}
+.hm-cd{font-size:clamp(.8rem,4vw,1.05rem)}
+.hm-line{font-size:clamp(.82rem,3.9vw,.98rem)}
+.hm-val{font-size:clamp(.9rem,4.3vw,1.08rem)}
+.hm-sub,.hm-cy{font-size:clamp(.8rem,3.8vw,.95rem)}
+.hm-stars .stars svg{width:clamp(18px,5.6vw,26px);height:clamp(18px,5.6vw,26px)}
+.hm-planets .pdisc{flex:none}
+.hx.hm-enter>.b>.in{font-size:clamp(.9rem,4.4vw,1.08rem);white-space:normal;text-align:center}
 html.red .hm-status .on{color:#fff}html.red .hm-status .dot{background:#fff;box-shadow:0 0 8px #fff}
 html.red #home{--cy:#ffd6cc;--cy2:rgba(255,214,204,.7);--txt2:#f2e0dc}
 </style>
