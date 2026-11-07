@@ -406,7 +406,11 @@ const DEG = Math.PI / 180, RAD = 180 / Math.PI;
 const MIN = 60000, HOUR = 3600000, DAY = 86400000;
 const KM_PER_AU = 149597870.7;
 const ZARAGOZA = { lat: 41.6488, lon: -0.8891, name: 'Zaragoza' };
-const APP_VERSION = '9.0';
+const APP_VERSION = '9.1';
+/* APK Android (Capacitor) : notifications natives programmées, pas de service worker */
+const NATIVE = !!(window.Capacitor && typeof Capacitor.isNativePlatform === 'function' && Capacitor.isNativePlatform());
+const LN = NATIVE && Capacitor.Plugins ? Capacitor.Plugins.LocalNotifications : null;
+let _nPerm = 'prompt', _nExact = 'granted';
 
 /* ── Stockage local (toujours protégé) ─────────────────────────────── */
 const store = {
@@ -1322,7 +1326,7 @@ VIEWS.tonight = function () {
   else line2 = 'Météo indisponible ; note basée sur la Lune.';
   let h = '';
   /* bannière alertes */
-  if ('Notification' in window && Notification.permission === 'default' && !store.get('notifDismiss', false)) {
+  if (notifPermState() === 'default' && !store.get('notifDismiss', false)) {
     h += '<div class="banner">' + icon('bell') + '<div style="flex:1" class="small">Recevoir une alerte avant les éclipses, pleines lunes et pluies d’étoiles filantes ?</div>' +
       '<button class="btn solid" data-act="notifon">Activer</button><button class="iconbtn" data-act="notifno" aria-label="Plus tard">' + icon('close') + '</button></div>';
   }
@@ -2112,18 +2116,19 @@ function renderSheet() {
       '<button class="row" style="width:100%;text-align:left" data-act="homestart"><span class="l">Écran d’accueil au démarrage<div class="xs muted">touche « LUNA » en haut pour le rouvrir</div></span><span class="switch' + (state.settings.home !== false ? ' on' : '') + '"></span></button>' +
       '<button class="row" style="width:100%;text-align:left" data-act="anim"><span class="l">Ciel étoilé animé en fond</span><span class="switch' + (state.settings.anim ? ' on' : '') + '"></span></button></div>';
     /* Alertes */
-    const perm = 'Notification' in window ? Notification.permission : 'unsupported';
+    const perm = notifPermState();
     const pl = { granted: '<span class="badge b-good">Activées</span>', denied: '<span class="badge b-bad">Bloquées</span>', default: '<span class="badge b-gold">À activer</span>', unsupported: '<span class="badge b-grey">Non disponibles</span>' }[perm];
     h += '<h3 class="st">' + icon('bell') + ' Alertes</h3><div class="card"><div class="row"><span class="l">Notifications</span><span class="v">' + pl + '</span></div>';
     if (perm === 'default') h += '<div class="pad" style="padding-top:0"><button class="btn solid block" data-act="notifon">' + icon('bell') + 'Activer les alertes</button></div>';
-    if (perm === 'denied') h += '<div class="pad small muted" style="padding-top:0">Pour les réactiver : Chrome → ⋮ → Paramètres → Paramètres des sites → Notifications → autoriser ce site.</div>';
+    if (perm === 'denied') h += '<div class="pad small muted" style="padding-top:0">' + (NATIVE ? 'Pour les réactiver : Paramètres Android → Applis → Luna → Notifications → autoriser.' : 'Pour les réactiver : Chrome → ⋮ → Paramètres → Paramètres des sites → Notifications → autoriser ce site.') + '</div>';
+    if (NATIVE && perm === 'granted' && _nExact !== 'granted') h += '<div class="pad small" style="padding-top:0"><div class="muted" style="margin-bottom:8px">Pour que les alertes partent à l’heure exacte, autorise les « alarmes et rappels ».</div><button class="btn block" data-act="notifexact">' + icon('bell') + 'Autoriser les alarmes exactes</button></div>';
     if (perm === 'granted') h += '<div class="pad" style="padding-top:0"><button class="btn block" data-act="notiftest">' + icon('bell') + 'Envoyer une notification de test</button></div>';
     h += '<div class="row"><span class="l"><b>Me prévenir pour…</b><div class="xs muted">3 jours avant, puis le jour même</div></span></div>' +
       ALERT_TYPES.map(([k, l, s]) => '<button class="row" style="width:100%;text-align:left" data-act="alerttype" data-arg="' + k + '"><span class="l">' + l + (s ? '<div class="xs muted">' + s + '</div>' : '') + '</span><span class="switch' + (state.settings.alerts[k] ? ' on' : '') + '"></span></button>').join('');
-    h += '<div class="pad small dim">Les alertes partent à l’ouverture de Luna et, si Android le permet, en arrière-plan : ouvre l’appli au moins une fois par semaine. Heures calmes : rien n’est envoyé entre 22 h et 8 h ; les alertes de la nuit partent à partir de 8 h. Les autres lancements restent visibles dans l’onglet Espace, sans notification.</div>';
+    h += '<div class="pad small dim">' + (NATIVE ? 'Les alertes sont programmées à l’avance sur le téléphone pour les ' + N_DAYS + ' prochains jours (3 jours avant à 8 h, puis le jour même à 8 h) et reprogrammées à chaque ouverture de Luna. Heures calmes : rien n’est envoyé entre 22 h et 8 h. Les autres lancements restent visibles dans l’onglet Espace, sans notification.' : 'Les alertes partent à l’ouverture de Luna et, si Android le permet, en arrière-plan : ouvre l’appli au moins une fois par semaine. Heures calmes : rien n’est envoyé entre 22 h et 8 h ; les alertes de la nuit partent à partir de 8 h. Les autres lancements restent visibles dans l’onglet Espace, sans notification.') + '</div>';
     h += '<div class="row"><span class="l"><b>Dans les 7 prochains jours</b></span></div><div id="alist">' + alertListHTML() + '</div></div>';
     /* À propos */
-    h += '<h3 class="st">' + icon('info') + ' À propos</h3><div class="card pad small dim" style="line-height:1.6">Luna ' + APP_VERSION + '. Calculs astronomiques : astronomy-engine (Don Cross, MIT). Satellites : satellite.js (MIT). Étoiles et constellations : catalogue HYG via d3-celestial. Météo : Open-Meteo (CC BY 4.0). Lancements : Launch Library 2 (The Space Devs). ISS : wheretheiss.at. Lieux : Open-Meteo et BigDataCloud. Heures affichées à l’heure de ton téléphone.</div>';
+    h += '<h3 class="st">' + icon('info') + ' À propos</h3><div class="card pad small dim" style="line-height:1.6">Luna ' + APP_VERSION + (NATIVE ? ' (Android)' : '') + '. Calculs astronomiques : astronomy-engine (Don Cross, MIT). Satellites : satellite.js (MIT). Étoiles et constellations : catalogue HYG via d3-celestial. Météo : Open-Meteo (CC BY 4.0). Lancements : Launch Library 2 (The Space Devs). ISS : wheretheiss.at. Lieux : Open-Meteo et BigDataCloud. Heures affichées à l’heure de ton téléphone.</div>';
   }
   c.innerHTML = h;
   const gq = document.getElementById('geoq');
@@ -2184,12 +2189,16 @@ async function idbMeta(key, val) {
     else { s.put({ key, value: val }); tx.oncomplete = () => res(val); tx.onerror = () => rej(tx.error); }
   });
 }
+function notifPermState() {
+  if (NATIVE) return LN ? ({ granted: 'granted', denied: 'denied' }[_nPerm] || 'default') : 'unsupported';
+  return 'Notification' in window ? Notification.permission : 'unsupported';
+}
 function alertListHTML() {
   const al = buildAlerts();
   return al.length ? al.slice(0, 12).map(a => { const d = new Date(a.ts); return '<div class="item"><span class="ic c-' + a.cat + '">' + icon(a.cat) + '</span><div class="bd"><div class="tt">' + esc(a.title.replace('Luna · ', '')) + '</div><div class="dd">' + esc(a.body) + '</div></div><div class="rt"><div class="dt">' + fmtDay(d) + '</div><div class="wn">' + fmtTime(d) + '</div></div></div>'; }).join('') : '<div class="empty">Rien de prévu cette semaine.</div>';
 }
-function buildAlerts() {
-  const now = new Date(), end = addDays(startOfDay(now), 8), out = [];
+function buildAlerts(days) {
+  const now = new Date(), end = addDays(startOfDay(now), days || 8), out = [];
   const y = now.getFullYear();
   if (eventsReady(y) && eventsReady(y + 1))
     for (const e of eventsBetween(new Date(now.getTime() - 2 * HOUR), end)) if (e.notify && state.settings.alerts[alertKind(e)]) out.push({ id: e.id, ts: e.date.getTime(), title: 'Luna · ' + e.title, body: e.short || e.detail, cat: e.cat });
@@ -2201,6 +2210,7 @@ function buildAlerts() {
 const QUIET_START = 22, QUIET_END = 8;
 function isQuiet(d) { const h = d.getHours(); return h >= QUIET_START || h < QUIET_END; }
 async function scheduleAlerts() {
+  if (NATIVE) return scheduleNative();
   if (!('Notification' in window) || Notification.permission !== 'granted' || !('serviceWorker' in navigator)) return;
   try {
     const reg = await navigator.serviceWorker.ready;
@@ -2224,17 +2234,118 @@ async function scheduleAlerts() {
   } catch (e) { console.warn('Alertes :', e); }
 }
 async function enableNotifs() {
+  if (NATIVE) {
+    if (!LN) { toast('Notifications non disponibles.'); return; }
+    try {
+      const p = await LN.requestPermissions(); _nPerm = p.display;
+      if (_nPerm === 'granted') { toast('Alertes activées ✓'); await nativeChannel(); await nativeExactCheck(); scheduleAlerts(); } else toast('Notifications refusées.');
+    } catch (e) { toast('Échec : ' + (e.message || e)); }
+    render(null); renderSheet(); return;
+  }
   if (!('Notification' in window)) { toast('Notifications non disponibles sur ce navigateur.'); return; }
   const p = await Notification.requestPermission();
   if (p === 'granted') { toast('Alertes activées ✓'); scheduleAlerts(); } else toast('Notifications refusées.');
   render(null); renderSheet();
 }
 async function testNotif() {
+  if (NATIVE) {
+    try {
+      await nativeChannel();
+      await LN.schedule({ notifications: [{ id: 1900000001 + (Date.now() % 200000000), title: 'Luna · Test réussi', body: 'Les notifications fonctionnent sur ton téléphone ✓ (' + fmtTime(new Date()) + ')', channelId: 'luna-alertes', smallIcon: 'ic_stat_luna', iconColor: '#f5b544', schedule: { at: new Date(Date.now() + 1500), allowWhileIdle: true } }] });
+      toast('Notification envoyée');
+    } catch (e) { toast('Échec : ' + (e.message || e)); }
+    return;
+  }
   try {
     const reg = await navigator.serviceWorker.ready;
     await reg.showNotification('Luna · Test réussi', { body: 'Les notifications fonctionnent sur ton téléphone ✓', icon: './icon-192.png', badge: './icon-192.png', tag: 'luna-test' });
   } catch (e) { toast('Échec : ' + (e.message || e)); }
 }
+
+/* ── Notifications natives (APK) : chaque alerte est programmée à l'avance, à heure fixe ──
+   3 jours avant à 8 h, puis le jour même à 8 h (jour = jour de l'événement décalé de 8 h :
+   un événement avant 8 h est annoncé la veille à 8 h). Rien entre 22 h et 8 h. */
+const N_DAYS = 60;
+let _nBusy = null, _nAgain = false;
+function nId(k) { let h = 2166136261; for (let i = 0; i < k.length; i++) { h ^= k.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) % 1900000000 + 1; }
+function at8(d) { const x = new Date(d); x.setHours(QUIET_END, 0, 0, 0); return x; }
+function minusDays(d, n) { const x = new Date(d); x.setDate(x.getDate() - n); return x; }
+function nextAllowed(t) { const d = new Date(t); if (!isQuiet(d)) return d; const x = at8(d); if (d.getHours() >= QUIET_START) x.setDate(x.getDate() + 1); return x; }
+async function nativeChannel() {
+  if (!LN || nativeChannel.done) return;
+  try { await LN.createChannel({ id: 'luna-alertes', name: 'Alertes Luna', description: 'Pleines lunes, éclipses, étoiles filantes, lancements…', importance: 4, visibility: 1, vibration: true }); nativeChannel.done = true; } catch (e) {}
+}
+async function nativeExactCheck() {
+  try { const r = await LN.checkExactNotificationSetting(); _nExact = r.exact_alarm || 'granted'; } catch (e) { _nExact = 'granted'; }
+}
+async function nativeExactAsk() {
+  try { const r = await LN.changeExactNotificationSetting(); _nExact = r.exact_alarm || _nExact; } catch (e) {}
+  await nativeExactCheck(); scheduleAlerts(); renderSheet();
+}
+async function scheduleNative() {
+  if (!LN) return;
+  if (_nBusy) { _nAgain = true; return _nBusy; }
+  _nBusy = (async () => {
+    do {
+      _nAgain = false;
+      try { await nativeSchedulePass(); } catch (e) { console.warn('Alertes natives :', e); }
+    } while (_nAgain);
+  })();
+  try { await _nBusy; } finally { _nBusy = null; }
+}
+async function nativeSchedulePass() {
+  const p = await LN.checkPermissions(); _nPerm = p.display;
+  if (_nPerm !== 'granted') return;
+  await nativeChannel();
+  const y = new Date().getFullYear();
+  if (!eventsReady(y) || !eventsReady(y + 1)) return;      // calculs pas encore prêts : on garde la programmation existante
+  const now = new Date(), nowMs = now.getTime(), limit = nowMs + N_DAYS * DAY;
+  const haveLaunches = !!(spx.data && spx.data.length);
+  const pend = ((await LN.getPending()).notifications || []).filter(n => !(n.id > 1900000000));   // hors tests
+  const keep = pend.filter(n => !haveLaunches && n.extra && n.extra.cat === 'launch'), old = pend.filter(n => !keep.includes(n));
+  const kept = {}; keep.forEach(n => { if (n.extra.key) kept[n.extra.key] = 1; });
+  const sent = store.get('nSent', {});                     // clé → heure prévue (passée = déjà envoyée)
+  for (const k in sent) if (nowMs - sent[k] > 75 * DAY || (sent[k] > nowMs && !kept[k])) delete sent[k];   // l'avenir est reprogrammé ci-dessous
+  const done = k => sent[k] && (sent[k] <= nowMs || kept[k]);
+  const out = [], seen = {};
+  const add = (a, k, at) => {
+    if (at.getTime() > limit || at.getTime() >= a.ts || seen[k]) return;
+    seen[k] = 1; sent[k] = at.getTime();
+    out.push({ id: nId(k), title: a.title, body: whenLong(new Date(a.ts), at) + ' · ' + a.body, channelId: 'luna-alertes', smallIcon: 'ic_stat_luna', iconColor: '#f5b544', schedule: { at, allowWhileIdle: true }, extra: { key: k, cat: a.cat } });
+  };
+  for (const a of buildAlerts(N_DAYS + 4)) {
+    if (a.ts <= nowMs) continue;
+    const kd = a.id + ':day', kp = a.id + ':pre';
+    if (done(kd)) continue;
+    const day = at8(new Date(a.ts - QUIET_END * HOUR)), pre = minusDays(day, 3);
+    if (!done(kp)) {
+      if (pre > now) add(a, kp, pre);
+      else if (day.getTime() - nowMs > 20 * HOUR) add(a, kp, nextAllowed(nowMs + 4000));   // installée tard : rattrapage
+    }
+    add(a, kd, day > now ? day : nextAllowed(nowMs + 4000));
+  }
+  if (old.length) await LN.cancel({ notifications: old.map(n => ({ id: n.id })) });
+  for (let i = 0; i < out.length; i += 50) await LN.schedule({ notifications: out.slice(i, i + 50) });
+  store.set('nSent', sent);
+}
+async function nativeInit() {
+  if (!LN) return;
+  try {
+    const p = await LN.checkPermissions(); _nPerm = p.display;
+    if (_nPerm !== 'granted' && _nPerm !== 'denied' && !store.get('nAsked', false)) {   // première ouverture : demande Android 13+
+      store.set('nAsked', true);
+      const r = await LN.requestPermissions(); _nPerm = r.display;
+    }
+    if (_nPerm === 'granted') { await nativeChannel(); await nativeExactCheck(); }
+  } catch (e) {}
+  render(null); renderSheet();
+  scheduleAlerts();
+}
+let _nLastResume = 0;
+document.addEventListener('visibilitychange', () => {
+  if (!NATIVE || document.hidden || Date.now() - _nLastResume < 10 * MIN) return;
+  _nLastResume = Date.now(); scheduleAlerts();
+});
 
 /* ════════════════ Actions, gestes, démarrage ════════════════ */
 const ACT = {
@@ -2265,7 +2376,8 @@ const ACT = {
   anim: () => { state.settings.anim = !state.settings.anim; saveSettings(); applySettings(); renderSheet(); },
   notifon: () => enableNotifs(),
   notifno: () => { store.set('notifDismiss', true); render(null); },
-  notiftest: () => testNotif()
+  notiftest: () => testNotif(),
+  notifexact: () => nativeExactAsk()
 };
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -2333,7 +2445,7 @@ setInterval(() => { if (!document.hidden && !$('.sheet-bg') && !sky.fs && TABS[s
 setInterval(() => { if (!document.hidden && TABS[state.tab].id === 'sky' && sky.offsetMin === 0) { updTimeLabels(); skyDraw(); } }, 30000);
 
 function registerSW() {
-  if (!('serviceWorker' in navigator)) return;
+  if (NATIVE || !('serviceWorker' in navigator)) return;
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').then(reg => {
       reg.addEventListener('updatefound', () => {
@@ -2358,6 +2470,7 @@ function init() {
   render('anim-in');
   loadMoonTex().then(() => { paintMoons(document); if (TABS[state.tab].id === 'agenda') refreshView(); if (sky.cv) skyDraw(); });
   registerSW();
+  if (NATIVE) nativeInit();
   if (state.loc.mode === 'gps') geolocate(false);
   onTabData();
   setTimeout(() => {

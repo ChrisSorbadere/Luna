@@ -1,0 +1,10 @@
+{
+  "appId": "io.github.chrissorbadere.luna",
+  "appName": "Luna",
+  "webDir": "www",
+  "backgroundColor": "#060816",
+  "android": { "allowMixedContent": false, "backgroundColor": "#060816" },
+  "plugins": {
+    "LocalNotifications": { "smallIcon": "ic_stat_luna", "iconColor": "#f5b544" }
+  }
+}

@@ -1,0 +1,101 @@
+name: Construire l'APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'luna-lib.js'
+      - 'manifest.json'
+      - 'icon-192.png'
+      - 'icon-512.png'
+      - 'android/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.json'
+      - '.github/workflows/apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Dépendances Capacitor
+        run: npm ci
+
+      - name: Fichiers web embarqués (hors ligne)
+        run: |
+          mkdir -p www
+          cp index.html luna-lib.js manifest.json icon-192.png icon-512.png www/
+
+      - name: Synchroniser le projet Android
+        run: npx cap sync android
+
+      - name: Numéro de version
+        run: |
+          V=$(grep -oP "const APP_VERSION = '\K[^']+" index.html)
+          sed -i "s/versionCode [0-9]*/versionCode ${{ github.run_number }}/" android/app/build.gradle
+          sed -i "s/versionName \"[^\"]*\"/versionName \"$V\"/" android/app/build.gradle
+          echo "APP_VERSION=$V" >> $GITHUB_ENV
+
+      - name: Clé de signature (secrets GitHub)
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KP: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KS" ] || [ -z "$KP" ]; then
+            echo "::warning::Secrets ANDROID_KEYSTORE_BASE64 et ANDROID_KEYSTORE_PASSWORD manquants (Settings › Secrets and variables › Actions) : compilation de contrôle avec une clé jetable, sans publication."
+            KP="controle-$RANDOM$RANDOM"
+            keytool -genkeypair -keystore android/app/release.jks -alias luna -keyalg RSA -keysize 2048 -validity 1 -storepass "$KP" -keypass "$KP" -dname "CN=Controle" >/dev/null
+            echo "ANDROID_KEYSTORE_PASSWORD=$KP" >> $GITHUB_ENV
+            echo "SIGNED=0" >> $GITHUB_ENV
+          else
+            echo "$KS" | base64 -d > android/app/release.jks
+            echo "ANDROID_KEYSTORE_PASSWORD=$KP" >> $GITHUB_ENV
+            echo "SIGNED=1" >> $GITHUB_ENV
+          fi
+          echo "::add-mask::$KP"
+          ALIASES=$(keytool -list -keystore android/app/release.jks -storepass "${KP}" | grep -i PrivateKeyEntry | cut -d, -f1)
+          A=$(echo "$ALIASES" | grep -ix luna || echo "$ALIASES" | head -1)
+          echo "Alias de la clé : $A"
+          echo "ANDROID_KEY_ALIAS=$A" >> $GITHUB_ENV
+
+      - name: Compiler l'APK signé
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          if ! ./gradlew --no-daemon assembleRelease 2>&1 | tee build.log; then
+            grep -E -A3 "error:|What went wrong|Exception|e: " build.log | grep -v "^> Task" | head -60 | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1
+          fi
+          cp app/build/outputs/apk/release/app-release.apk ../Luna-${APP_VERSION}-b${{ github.run_number }}.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Luna-apk
+          path: Luna-*.apk
+
+      - name: Publier dans « Releases »
+        if: env.SIGNED == '1'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-v${{ env.APP_VERSION }}-b${{ github.run_number }}
+          name: Luna Android ${{ env.APP_VERSION }} (build ${{ github.run_number }})
+          body: "Télécharge le fichier .apk ci-dessous sur le téléphone, ouvre-le et autorise l'installation. Au premier lancement, accepte les notifications et la position. Les versions suivantes s'installent par-dessus."
+          files: Luna-*.apk
+          make_latest: true
