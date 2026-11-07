@@ -1,6 +1,6 @@
-// Luna — Service Worker v16
-const CACHE_NAME = 'luna-v16';
-const PRECACHE = ['./', './index.html', './luna-lib.js', './manifest.json', './icon-192.png', './icon-512.png'];
+// Luna — Service Worker v17
+const CACHE_NAME = 'luna-v17';
+const PRECACHE = ['./', './index.html', './luna-lib.js', './manifest.json', './icon-192.png?v=2', './icon-512.png?v=2'];
 // Données en temps réel : jamais mises en cache par le service worker
 const LIVE = ['api.open-meteo.com', 'geocoding-api.open-meteo.com', 'll.thespacedevs.com', 'api.wheretheiss.at', 'celestrak.org', 'api.bigdatacloud.net'];
 
@@ -8,7 +8,7 @@ self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE_NAME).then(c => Promise.all(PRECACHE.map(u => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x.startsWith('luna-') && x !== CACHE_NAME).map(x => caches.delete(x)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== CACHE_NAME).map(x => caches.delete(x)))).then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
@@ -77,4 +77,3 @@ self.addEventListener('notificationclick', e => {
     return self.clients.openWindow('./');
   }));
 });
-// Ne supprime que ses propres caches : toutes les applis partagent chrissorbadere.github.io.
